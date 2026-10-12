@@ -73,7 +73,7 @@ layout_mode = 2
 [node name="Label" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/FormContainer/NameContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
-text = "CALL SIGN / OPERATOR NAME:"
+text = "OPERATOR NAME:"
 
 [node name="PlayerNameInput" type="LineEdit" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/FormContainer/NameContainer"]
 unique_name_in_owner = true

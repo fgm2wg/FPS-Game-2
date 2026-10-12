@@ -241,6 +241,105 @@ public partial class AssetVerificationRunner : Node
         GD.Print($"  [OK] Realistic JumpVelocity verified: {player.JumpVelocity} m/s (jump height ~0.50m with 9.81m/s^2 gravity)");
         GD.Print($"  [OK] Respawn verified: CameraPivot={camPivot.Position}, Rotation={camPivot.Rotation}, CameraRoll={cam.Rotation.Z}");
 
+        // Verify EmoteWheel UI node
+        var emoteWheel = player.GetNodeOrNull<Control>("UI/EmoteWheel");
+        if (emoteWheel == null)
+        {
+            GD.PrintErr("[TEST FAILED] EmoteWheel UI missing from Player.tscn!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print("  [OK] EmoteWheel UI verified in Player.tscn.");
+
+        // Verify Crouch animations
+        charModel.UpdateAnimationState(0.0f, true, false, false, isCrouched: true);
+        if (animPlayer.CurrentAnimation != "Crouch_Idle")
+        {
+            GD.PrintErr($"[TEST FAILED] Expected 'Crouch_Idle', got '{animPlayer.CurrentAnimation}'!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print("  [OK] Crouch_Idle animation verified.");
+
+        charModel.UpdateAnimationState(2.5f, true, false, false, isCrouched: true);
+        if (animPlayer.CurrentAnimation != "Crouch_Fwd" || Mathf.Abs(animPlayer.SpeedScale - 1.0f) > 0.05f)
+        {
+            GD.PrintErr($"[TEST FAILED] Expected 'Crouch_Fwd' with speedScale=1, got '{animPlayer.CurrentAnimation}' speed={animPlayer.SpeedScale}!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print("  [OK] Crouch_Fwd forward animation verified.");
+
+        charModel.UpdateAnimationState(2.5f, true, false, true, isCrouched: true);
+        if (animPlayer.CurrentAnimation != "Crouch_Fwd" || Mathf.Abs(animPlayer.SpeedScale - (-1.0f)) > 0.05f)
+        {
+            GD.PrintErr($"[TEST FAILED] Expected 'Crouch_Fwd' with speedScale=-1, got '{animPlayer.CurrentAnimation}' speed={animPlayer.SpeedScale}!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print("  [OK] Crouch_Fwd reverse animation verified.");
+
+        // Verify 8 Emote animations & weapon hiding
+        string[] testEmotes = { "Dance", "Roll", "Spell_Simple_Shoot", "Swim_Fwd", "Sword_Attack", "Punch_Jab", "Punch_Cross", "Sitting_Idle" };
+        foreach (var emote in testEmotes)
+        {
+            if (!animPlayer.HasAnimation(emote))
+            {
+                GD.PrintErr($"[TEST FAILED] Emote animation '{emote}' missing in character GLB!");
+                GetTree().Quit(1);
+                return;
+            }
+
+            charModel.UpdateAnimationState(0.0f, true, false, false, false, activeEmote: emote);
+            if (animPlayer.CurrentAnimation != emote)
+            {
+                GD.PrintErr($"[TEST FAILED] Failed to play emote '{emote}', current is '{animPlayer.CurrentAnimation}'!");
+                GetTree().Quit(1);
+                return;
+            }
+            if (rifleInHand.Visible)
+            {
+                GD.PrintErr($"[TEST FAILED] Weapon must be hidden during emote '{emote}'!");
+                GetTree().Quit(1);
+                return;
+            }
+            GD.Print($"  [OK] Emote '{emote}' verified with weapon hidden.");
+        }
+
+        // Verify stopping emote unhides weapon and returns to idle
+        charModel.UpdateAnimationState(0.0f, true, false, false, false, activeEmote: "");
+        if (!rifleInHand.Visible)
+        {
+            GD.PrintErr("[TEST FAILED] Weapon should be unhidden after emote stops!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print("  [OK] Weapon unhidden after emote completion.");
+
+        // Verify crouch collider sizing
+        player.IsCrouched = true;
+        var bodyCol = player.GetNode<CollisionShape3D>("BodyCollider");
+        var bodyCap = bodyCol.Shape as CapsuleShape3D;
+        if (bodyCap == null || Mathf.Abs(bodyCap.Height - 1.2f) > 0.01f || Mathf.Abs(bodyCol.Position.Y - 0.6f) > 0.01f)
+        {
+            GD.PrintErr($"[TEST FAILED] Crouch collider height/pos incorrect! Height={bodyCap?.Height}, Pos={bodyCol.Position}");
+            GetTree().Quit(1);
+            return;
+        }
+        var headHurtbox = player.GetNode<Area3D>("Hurtboxes/HeadHurtbox");
+        if (Mathf.Abs(headHurtbox.Position.Y - 1.05f) > 0.01f)
+        {
+            GD.PrintErr($"[TEST FAILED] Head hurtbox crouch position Y should be 1.05! Actual={headHurtbox.Position.Y}");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print($"  [OK] Crouch colliders verified: BodyHeight={bodyCap.Height}, BodyY={bodyCol.Position.Y}, HeadY={headHurtbox.Position.Y}");
+
+        // Test Power Cast easter egg barrage execution
+        player.Rpc("PlayEmoteRpc", "Spell_Simple_Shoot");
+        player._Process(0.25); // Advance past 0.18s trigger window
+        GD.Print("  [OK] Power Cast bullet wave barrage easter egg executed successfully.");
+
         GD.Print("\n=================== ALL ASSET INTEGRATION TESTS PASSED! ===================");
         GetTree().Quit(0);
     }

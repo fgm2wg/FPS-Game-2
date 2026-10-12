@@ -28,7 +28,12 @@ public static class AssetIntegrationTests
                 GD.Print($"  - {child.Name} ({child.GetClass()})");
                 if (child is AnimationPlayer ap)
                 {
-                    GD.Print($"    Animations in {child.Name}: {string.Join(", ", ap.GetAnimationList())}");
+                    GD.Print($"    Animations in {child.Name}: ({ap.GetAnimationList().Length} total)");
+                    foreach (var animName in ap.GetAnimationList())
+                    {
+                        var anim = ap.GetAnimation(animName);
+                        GD.Print($"    [ANIM] {animName} | Length: {anim.Length:F2}s | Step: {anim.Step:F2}s | Tracks: {anim.GetTrackCount()}");
+                    }
                 }
                 foreach (Node grandchild in child.GetChildren())
                 {
@@ -57,7 +62,9 @@ public static class AssetIntegrationTests
         else
         {
             var instance = zc57.Instantiate<Node3D>();
-            GD.Print($"[AssetTest] ZC57_Rigged instantiated successfully with {instance.GetChildCount()} direct children.");
+            var ap = instance.FindChild("*AnimationPlayer*", true, false) as AnimationPlayer;
+            string anims = ap != null ? string.Join(", ", ap.GetAnimationList()) : "none";
+            GD.Print($"[AssetTest] ZC57_Rigged direct children: {instance.GetChildCount()}, animations: {anims}");
             instance.QueueFree();
         }
 
@@ -71,7 +78,9 @@ public static class AssetIntegrationTests
         else
         {
             var instance = mgp7.Instantiate<Node3D>();
-            GD.Print($"[AssetTest] MGP7_Rigged instantiated successfully with {instance.GetChildCount()} direct children.");
+            var ap = instance.FindChild("*AnimationPlayer*", true, false) as AnimationPlayer;
+            string anims = ap != null ? string.Join(", ", ap.GetAnimationList()) : "none";
+            GD.Print($"[AssetTest] MGP7_Rigged direct children: {instance.GetChildCount()}, animations: {anims}");
             instance.QueueFree();
         }
 
@@ -97,7 +106,17 @@ public static class AssetIntegrationTests
         }
         else
         {
-            GD.Print("[AssetTest] Grenade models loaded successfully.");
+            var instance1 = frag.Instantiate<Node3D>();
+            var ap1 = instance1.FindChild("*AnimationPlayer*", true, false) as AnimationPlayer;
+            string anims1 = ap1 != null ? string.Join(", ", ap1.GetAnimationList()) : "none";
+            GD.Print($"[AssetTest] M67V1 animations: {anims1}");
+            instance1.QueueFree();
+
+            var instance2 = flash.Instantiate<Node3D>();
+            var ap2 = instance2.FindChild("*AnimationPlayer*", true, false) as AnimationPlayer;
+            string anims2 = ap2 != null ? string.Join(", ", ap2.GetAnimationList()) : "none";
+            GD.Print($"[AssetTest] M84V1 animations: {anims2}");
+            instance2.QueueFree();
         }
 
         return allPassed;

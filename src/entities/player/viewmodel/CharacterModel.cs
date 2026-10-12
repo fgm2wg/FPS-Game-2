@@ -31,6 +31,8 @@ public partial class CharacterModel : Node3D
     private bool _isDead;
     private int _teamId = 1;
 
+    public event Action? EmoteFinished;
+
     public Vector3 MuzzlePosition => _muzzleMarker != null ? _muzzleMarker.GlobalPosition : GlobalPosition + Vector3.Up * 1.3f;
 
     public Vector3 GetHeadGlobalPosition()
@@ -46,6 +48,14 @@ public partial class CharacterModel : Node3D
     {
         BuildCharacter();
         ApplyTeamMaterial();
+    }
+
+    public override void _ExitTree()
+    {
+        if (_animPlayer != null)
+        {
+            _animPlayer.AnimationFinished -= OnAnimationFinished;
+        }
     }
 
     private void BuildCharacter()
@@ -89,9 +99,31 @@ public partial class CharacterModel : Node3D
             }
         }
 
-        // Configure default animation playback
+        // Configure animation playback & looping modes
         if (_animPlayer != null)
         {
+            _animPlayer.AnimationFinished += OnAnimationFinished;
+
+            var animList = _animPlayer.GetAnimationList();
+            foreach (var animName in animList)
+            {
+                var anim = _animPlayer.GetAnimation(animName);
+                if (anim != null)
+                {
+                    if (animName == "Crouch_Idle" ||
+                        animName == "Crouch_Fwd" ||
+                        animName == "Pistol_Idle" ||
+                        animName == "Walk" ||
+                        animName == "Sprint" ||
+                        animName == "Dance" ||
+                        animName == "Swim_Fwd" ||
+                        animName == "Sitting_Idle")
+                    {
+                        anim.LoopMode = Animation.LoopModeEnum.Linear;
+                    }
+                }
+            }
+
             PlayAnimation("Pistol_Idle", 0.1f);
         }
     }
@@ -174,7 +206,7 @@ public partial class CharacterModel : Node3D
         _mannequinMesh.SetSurfaceOverrideMaterial(0, mat);
     }
 
-    public void UpdateAnimationState(float horizontalSpeed, bool isOnFloor, bool isDead, bool isMovingBackward = false)
+    public void UpdateAnimationState(float horizontalSpeed, bool isOnFloor, bool isDead, bool isMovingBackward = false, bool isCrouched = false, string activeEmote = "")
     {
         if (isDead)
         {
@@ -192,11 +224,44 @@ public partial class CharacterModel : Node3D
 
         _isDead = false;
 
+        // If an emote is active, hide weapon and play the emote animation
+        if (!string.IsNullOrEmpty(activeEmote))
+        {
+            if (_weaponModel != null && _weaponModel.Visible)
+            {
+                _weaponModel.Visible = false;
+            }
+
+            if (_currentAnim != activeEmote)
+            {
+                PlayAnimation(activeEmote, 0.2f);
+            }
+            return;
+        }
+
+        // Ensure weapon model is visible when not emoting or dead
+        if (_weaponModel != null && !_weaponModel.Visible)
+        {
+            _weaponModel.Visible = true;
+        }
+
         string targetAnim;
         float speedScale = 1.0f;
         if (!isOnFloor)
         {
             targetAnim = "Jump";
+        }
+        else if (isCrouched)
+        {
+            if (horizontalSpeed > 0.2f)
+            {
+                targetAnim = "Crouch_Fwd";
+                if (isMovingBackward) speedScale = -1.0f;
+            }
+            else
+            {
+                targetAnim = "Crouch_Idle";
+            }
         }
         else if (_currentAnim == "Sprint")
         {
@@ -259,6 +324,18 @@ public partial class CharacterModel : Node3D
             {
                 _animPlayer.SpeedScale = speedScale;
             }
+        }
+    }
+
+    private void OnAnimationFinished(StringName animName)
+    {
+        if (animName == "Roll" ||
+            animName == "Spell_Simple_Shoot" ||
+            animName == "Sword_Attack" ||
+            animName == "Punch_Jab" ||
+            animName == "Punch_Cross")
+        {
+            EmoteFinished?.Invoke();
         }
     }
 
@@ -331,7 +408,13 @@ public partial class CharacterModel : Node3D
         }
 
         // Apply upper body spine aim pitch so the torso bends to match where player aims
-        if (_skeleton != null && !_isDead)
+        bool isEmoting = !string.IsNullOrEmpty(_currentAnim) &&
+                         (_currentAnim == "Dance" || _currentAnim == "Roll" ||
+                          _currentAnim == "Spell_Simple_Shoot" || _currentAnim == "Swim_Fwd" ||
+                          _currentAnim == "Sword_Attack" || _currentAnim == "Punch_Jab" ||
+                          _currentAnim == "Punch_Cross" || _currentAnim == "Sitting_Idle");
+
+        if (_skeleton != null && !_isDead && !isEmoting)
         {
             if (_spineBone2 != -1)
             {
