@@ -10,13 +10,13 @@
 
 ```mermaid
 flowchart TD
-    P1["Phase 1: Networking Core & Connection UI"] --> P2["Phase 2: Networked Player & Movement Sync"]
-    P2 --> P3["Phase 3: Networked Combat & Hitreg"]
-    P3 --> P4["Phase 4: Full Weapon Arsenal & Ballistics"]
-    P4 --> P5["Phase 5: 6v6 Team Deathmatch & Spawning"]
-    P5 --> P6["Phase 6: In-Game HUD, Scoreboard & Audio"]
-    P6 --> P7["Phase 7: Scorestreaks & Tactical Systems"]
-    P7 --> P8["Phase 8: Production Maps & Optimization"]
+	P1["Phase 1: Networking Core & Connection UI"] --> P2["Phase 2: Networked Player & Movement Sync"]
+	P2 --> P3["Phase 3: Networked Combat & Hitreg"]
+	P3 --> P4["Phase 4: Full Weapon Arsenal & Ballistics"]
+	P4 --> P5["Phase 5: 6v6 Team Deathmatch & Spawning"]
+	P5 --> P6["Phase 6: In-Game HUD, Scoreboard & Audio"]
+	P6 --> P7["Phase 7: Scorestreaks & Tactical Systems"]
+	P7 --> P8["Phase 8: Production Maps & Optimization"]
 ```
 
 ---
@@ -33,23 +33,23 @@ The absolute foundation of the project. Before movement or shooting can be built
   - Clients send input and intents; clients never dictate damage or deaths.
 
 ### 1.2 Core Components & Deliverables
-- [ ] **`NetworkManager.cs` (`src/network/core/`)**:
+- [x] **`NetworkManager.cs` (`src/network/core/`)**:
   - Autoload singleton managing network lifecycle.
   - Methods: `HostGame(int port, int maxPlayers)`, `JoinGame(string address, int port)`, `Disconnect()`.
   - Signal listeners: `PeerConnected`, `PeerDisconnected`, `ConnectedToServer`, `ConnectionFailed`, `ServerDisconnected`.
   - Connected peer dictionary tracking peer IDs, player names, ping, and assigned teams.
-- [ ] **`ConnectionMenu.tscn` (`src/ui/menus/lobby/`)**:
+- [x] **`ConnectionMenu.tscn` (`src/ui/menus/lobby/`)**:
   - Clean UI with input fields:
-    - **Player Name**: Cached locally in user settings.
-    - **Host IP Address**: Defaults to `127.0.0.1` for local testing.
-    - **Port**: Defaults to `7777`.
+	- **Player Name**: Cached locally in user settings.
+	- **Host IP Address**: Defaults to `127.0.0.1` for local testing.
+	- **Port**: Defaults to `7777`.
   - Action buttons: `Host Game`, `Join Game`, `Dedicated Server (Headless)`.
   - Status display: Real-time feedback ("Connecting...", "Connected", "Connection Failed: Server full").
-- [ ] **`LobbyMenu.tscn` (`src/ui/menus/lobby/`)**:
+- [x] **`LobbyMenu.tscn` (`src/ui/menus/lobby/`)**:
   - Connected player roster list with ping readouts.
   - Team assignment toggles (Alpha / Bravo).
   - Host "Start Match" button that initiates scene change across all peers via `Rpc`.
-- [ ] **`MultiplayerSpawner` Setup (`src/network/spawning/`)**:
+- [x] **`MultiplayerSpawner` Setup (`src/network/spawning/`)**:
   - Configured to dynamically instantiate and replicate player entities into the active map when peers connect.
 
 ---
@@ -69,10 +69,10 @@ The absolute foundation of the project. Before movement or shooting can be built
   - Validates player velocity and movement boundaries to prevent speedhacking or clipping.
 
 ### 2.2 Deliverables
-- [ ] `Player.tscn` with authority branching (`SetMultiplayerAuthority(peerId)`).
+- [x] `Player.tscn` with authority branching (`SetMultiplayerAuthority(peerId)`).
 - [ ] State Machine: `IdleState`, `MoveState`, `SprintState`, `CrouchState`, `SlideState`, `JumpState`, `FallState`.
-- [ ] Snapshot replication via `MultiplayerSynchronizer` or compact custom RPC packets (`Position`, `RotationY`, `Pitch`, `StateFlags`).
-- [ ] Verification in `movement_gym.tscn` with 2+ connected client instances.
+- [x] Snapshot replication via `MultiplayerSynchronizer` or compact custom RPC packets (`Position`, `RotationY`, `Pitch`, `StateFlags`).
+- [x] Verification in `movement_gym.tscn` with 2+ connected client instances.
 
 ---
 
@@ -86,20 +86,20 @@ The absolute foundation of the project. Before movement or shooting can be built
   - Server verifies fire rate cooldown, ammunition count, and weapon validity.
   - Executes raycast query against Layer 6 (`Enemy_Hitbox`) and Layer 1 (`World_Static`).
   - Calculates damage based on hit bone multiplier:
-    - **Head**: 2.5x critical
-    - **Chest/Torso**: 1.0x baseline
-    - **Limbs**: 0.7x reduced
+	- **Head**: 2.5x critical
+	- **Chest/Torso**: 1.0x baseline
+	- **Limbs**: 0.7x reduced
   - Applies damage to target's `HealthComponent`.
 - **Feedback Loop**:
   - Server invokes `RpcId(attackerId, nameof(ConfirmHit), isHeadshot, damage)` to trigger client-side crosshair hitmarkers and audio cues.
   - Server broadcasts health changes and death events.
 
 ### 3.2 Deliverables
-- [ ] `HealthComponent.cs` with networked health/shield values.
-- [ ] Precision hurtbox setup (`HurtboxComponent.cs`) attached to character skeleton bones.
-- [ ] Authoritative kill confirmation, death state, and spectator camera.
+- [x] `HealthComponent.cs` with networked health/shield values and authoritative damage handling.
+- [x] Precision hurtbox setup (`HurtboxComponent.cs`) attached to character bones (Head 2.5x, Torso 1.0x).
+- [x] Authoritative kill confirmation, death state, and hit registration feedback loop.
 - [ ] Cosmetic client-side ragdolls spawned on Layer 11 (`Ragdolls_Debris`).
-- [ ] Respawn countdown and respawn point selection.
+- [x] Respawn countdown (3s) and respawn point repositioning.
 
 ---
 
@@ -137,31 +137,38 @@ All weapons are data-driven using C# `[GlobalClass]` resources (`WeaponData.cs`)
   - Dynamically flips spawn zones when one team pushes deep into enemy territory.
 
 ### 5.2 Match Lifecycle Rules
-- **Game Mode**: Team Deathmatch (`TeamDeathmatchMode.cs`).
-  - Score limit: First team to reach **75 kills** (or team with highest kills when time expires).
-  - Time limit: **10 minutes**.
-- **Lifecycle States**:
-  1. `WaitingForPlayers`: Minimum players required to start countdown.
-  2. `MatchWarmup`: 10-second countdown; players locked in spawn points.
-  3. `MatchInProgress`: Active scoring, respawning, and combat.
-  4. `MatchEnded`: Game freezes; announces winning team ("Team Alpha Victory").
-  5. `PostMatchIntermission`: Final scoreboard display before cycling map or returning to lobby.
+- [x] **Match Lifecycle Architecture (`MatchManager.cs`)**:
+  - Authoritative match controller: Warmup (5s, movement locked), InProgress (20m / 1200s), Ended states.
+  - Score limit: First team to reach **100 kills** (or team with highest kills when time expires).
+  - Time limit: **20 minutes**.
+  - Authoritative RPC broadcast and client clock interpolation.
+- [ ] Dynamic spawn flips and combat radius checks.
+- [ ] Post-match intermission and map cycling.
 
 ---
 
 ## Phase 6: In-Game UI, Scoreboard, HUD & Audio
 
 ### 6.1 User Interface Deliverables
-- [ ] **HUD (`src/ui/hud/`)**:
-  - Dynamic Crosshair: Expands with movement velocity and continuous fire spread.
-  - Hitmarkers: Standard white tick for body hit, red tick for headshot, skull icon for kill.
-  - Health & Shield status bar with directional damage indicator arrows.
-  - Weapon Status: Current ammo in magazine, reserve ammo count, fire mode (Auto/Semi/Burst).
-  - Kill Feed: Real-time kill notifications in top-right corner (`[Attacker] [WeaponIcon] [Victim]`).
-  - Match Header: Round timer countdown and Team Alpha vs Bravo score comparison.
-- [ ] **Scoreboard (`src/ui/hud/scoreboard/`)**:
-  - Held with `Tab` key.
-  - Two-column team layout showing: Player Name, Ping (ms), Kills, Deaths, Assists, Score, Killstreak count.
+- [x] **Scoreboard (`src/ui/hud/scoreboard/`)**:
+  - Toggled/held with `Tab` key (closes on Escape; no overlap with Pause Menu).
+  - Two-column team layout (Alpha Blue vs Bravo Red): Operator, Score, K, D, A, Ping.
+  - Local player highlighted in vivid yellow with `[YOU]` tag (and `[HOST]` tag for host).
+  - Perfectly centered data columns matching headers.
+- [x] **Persistent Match HUD (`src/ui/hud/MatchHUD.tscn`)**:
+  - Bottom-left match widget: Live 20-minute clock (`MM:SS`) and team scores (`ALPHA X / 100`, `BRAVO Y / 100`).
+  - Top-right real-time FPS counter (`## FPS`) with throttled low-overhead polling.
+  - Top-right tactical Health status bar with dynamic color transitions (Green/Yellow/Red) and numeric HP (`100 / 100`).
+  - Top-center 360° Compass with cardinal bearing directions (North = -Z, East = +X, South = +Z, West = -X).
+  - Top-left 2D procedural radar Minimap with zero-render-target overhead, showing world bounds and team blips.
+  - Top-left tactical Kill Feed displaying up to 5 concurrent entries, 5-second fade expiration, and yellow highlight for local player.
+  - Bottom-right tactical Weapon Card with current ammo (30), reserve ammo (120), fire mode cycle (`[V] AUTO/SEMI/BURST`), and equipment (`[G] FRAG x2`, `[Q] FLASH x2`).
+  - Bottom-right Scorestreaks Ladder (UAV 3, Care Package 4, Sentry 6) with vertical milestone progress bar.
+  - Center dynamic reticle with flashing diagonal Hitmarkers (white body hit, red headshot/kill).
+  - Center announcement banner (Warmup countdown 5..1..GO! and match victory banner).
+  - Center death banner ("ELIMINATED - RESPAWNING IN 3...").
+- [x] **In-Game Pause Menu (`src/ui/menus/pause/PauseMenu.tscn`)**:
+  - Toggled with `Escape`, releases mouse cursor, "LEAVE MATCH" button, disconnected return to lobby.
 
 ### 6.2 Audio Architecture
 - [ ] Dedicated audio bus layout: `Master`, `Music`, `SFX`, `Weapons`, `Footsteps`, `UI`, `Voices`.

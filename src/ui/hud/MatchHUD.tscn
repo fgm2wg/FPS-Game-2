@@ -1,0 +1,430 @@
+[gd_scene format=3 uid="uid://ddr4dbin8eqke"]
+
+[ext_resource type="Script" path="res://src/ui/hud/MatchHUD.cs" id="1_hud"]
+[ext_resource type="Script" path="res://src/ui/hud/minimap/MinimapWidget.cs" id="2_minimap"]
+[ext_resource type="Script" path="res://src/ui/hud/killfeed/KillFeedWidget.cs" id="3_killfeed"]
+[ext_resource type="Script" path="res://src/ui/hud/compass/CompassWidget.cs" id="4_compass"]
+[ext_resource type="Script" path="res://src/ui/hud/reticle/ReticleWidget.cs" id="5_reticle"]
+[ext_resource type="Script" path="res://src/ui/hud/scorestreaks/ScorestreakWidget.cs" id="6_streaks"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_bg"]
+bg_color = Color(0.15, 0.18, 0.22, 0.6)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_fill"]
+bg_color = Color(0.28, 0.88, 0.48, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[node name="MatchHUD" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_hud")
+
+[node name="MinimapWidget" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 170.0
+offset_bottom = 170.0
+mouse_filter = 2
+script = ExtResource("2_minimap")
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="MinimapWidget"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="MinimapWidget/SubViewportContainer"]
+handle_input_locally = false
+size = Vector2i(150, 150)
+render_target_update_mode = 4
+debug_draw = 1
+
+[node name="MinimapCamera" type="Camera3D" parent="MinimapWidget/SubViewportContainer/SubViewport"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 40, 0)
+cull_mask = 1
+projection = 1
+size = 65.0
+
+[node name="RadarOverlay" type="Control" parent="MinimapWidget"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="KillFeedWidget" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+offset_left = 20.0
+offset_top = 180.0
+offset_right = 340.0
+offset_bottom = 330.0
+mouse_filter = 2
+theme_override_constants/separation = 4
+script = ExtResource("3_killfeed")
+
+[node name="CompassWidget" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -190.0
+offset_top = 14.0
+offset_right = 190.0
+offset_bottom = 64.0
+grow_horizontal = 2
+mouse_filter = 2
+script = ExtResource("4_compass")
+
+[node name="TopRightStatus" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -330.0
+offset_top = 18.0
+offset_right = -20.0
+offset_bottom = 44.0
+grow_horizontal = 0
+mouse_filter = 2
+theme_override_constants/separation = 14
+alignment = 2
+
+[node name="FpsLabel" type="Label" parent="TopRightStatus"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.88, 0.5, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 13
+text = "170 FPS"
+vertical_alignment = 1
+
+[node name="VSeparator" type="VSeparator" parent="TopRightStatus"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="HealthHBox" type="HBoxContainer" parent="TopRightStatus"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="HpTitle" type="Label" parent="TopRightStatus/HealthHBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.9, 0.95, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 13
+text = "HP"
+vertical_alignment = 1
+
+[node name="HealthProgressBar" type="ProgressBar" parent="TopRightStatus/HealthHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(95, 8)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_hp_bg")
+theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
+value = 100.0
+show_percentage = false
+
+[node name="HealthValueLabel" type="Label" parent="TopRightStatus/HealthHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.35, 0.9, 0.5, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 13
+text = "100 / 100"
+vertical_alignment = 1
+
+[node name="BottomLeftWidget" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -105.0
+offset_right = 230.0
+offset_bottom = -20.0
+grow_vertical = 0
+mouse_filter = 2
+
+[node name="VBox" type="VBoxContainer" parent="BottomLeftWidget"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="ClockRow" type="HBoxContainer" parent="BottomLeftWidget/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="ClockTitle" type="Label" parent="BottomLeftWidget/VBox/ClockRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.75, 0.85, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 11
+text = "TIME REMAINING:"
+
+[node name="ClockLabel" type="Label" parent="BottomLeftWidget/VBox/ClockRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 14
+text = "20:00"
+horizontal_alignment = 2
+
+[node name="HSeparator" type="HSeparator" parent="BottomLeftWidget/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="AlphaScoreLabel" type="Label" parent="BottomLeftWidget/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.35, 0.7, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 14
+text = "ALPHA  0 / 100"
+
+[node name="BravoScoreLabel" type="Label" parent="BottomLeftWidget/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.38, 0.38, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 14
+text = "BRAVO  0 / 100"
+
+[node name="ScorestreaksWidget" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -125.0
+offset_top = -180.0
+offset_right = -20.0
+offset_bottom = -75.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("6_streaks")
+
+[node name="WeaponWidget" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -310.0
+offset_top = -75.0
+offset_right = -20.0
+offset_bottom = -15.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+
+[node name="HBox" type="HBoxContainer" parent="WeaponWidget"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 14
+alignment = 2
+
+[node name="WeaponInfo" type="VBoxContainer" parent="WeaponWidget/HBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+alignment = 1
+
+[node name="WeaponNameLabel" type="Label" parent="WeaponWidget/HBox/WeaponInfo"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.95, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 15
+text = "M4A1"
+
+[node name="FireModeLabel" type="Label" parent="WeaponWidget/HBox/WeaponInfo"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.75, 0.95, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 11
+text = "[V] AUTO"
+
+[node name="AmmoContainer" type="VBoxContainer" parent="WeaponWidget/HBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = -5
+alignment = 1
+
+[node name="AmmoMagLabel" type="Label" parent="WeaponWidget/HBox/AmmoContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 28
+text = "30"
+horizontal_alignment = 2
+
+[node name="AmmoReserveLabel" type="Label" parent="WeaponWidget/HBox/AmmoContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.75, 0.85, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 13
+text = "120"
+horizontal_alignment = 2
+
+[node name="EquipmentHBox" type="HBoxContainer" parent="WeaponWidget/HBox"]
+layout_mode = 2
+mouse_filter = 2
+alignment = 1
+theme_override_constants/separation = 10
+
+[node name="TacticalSlot" type="HBoxContainer" parent="WeaponWidget/HBox/EquipmentHBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 3
+alignment = 1
+
+[node name="TacticalIcon" type="Label" parent="WeaponWidget/HBox/EquipmentHBox/TacticalSlot"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.75, 0.95, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 11
+text = "[Q]"
+
+[node name="TacticalLabel" type="Label" parent="WeaponWidget/HBox/EquipmentHBox/TacticalSlot"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.93, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 14
+text = "2"
+
+[node name="LethalSlot" type="HBoxContainer" parent="WeaponWidget/HBox/EquipmentHBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 3
+alignment = 1
+
+[node name="LethalIcon" type="Label" parent="WeaponWidget/HBox/EquipmentHBox/LethalSlot"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.65, 0.35, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 11
+text = "[G]"
+
+[node name="LethalLabel" type="Label" parent="WeaponWidget/HBox/EquipmentHBox/LethalSlot"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.93, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 14
+text = "2"
+
+[node name="ReticleCenter" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="ReticleWidget" type="Control" parent="ReticleCenter"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("5_reticle")
+
+[node name="CenterBannerContainer" type="CenterContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 90.0
+offset_bottom = 220.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="BannerVBox" type="VBoxContainer" parent="CenterBannerContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="BannerTitleLabel" type="Label" parent="CenterBannerContainer/BannerVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.95, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 20
+text = "MATCH STARTING IN"
+horizontal_alignment = 1
+
+[node name="BannerCountdownLabel" type="Label" parent="CenterBannerContainer/BannerVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.15, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 46
+text = "5"
+horizontal_alignment = 1

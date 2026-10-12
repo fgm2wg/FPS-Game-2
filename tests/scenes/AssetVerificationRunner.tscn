@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://ssetverif001"]
+
+[ext_resource type="Script" path="res://tests/scenes/AssetVerificationRunner.cs" id="1_verif"]
+
+[node name="AssetVerificationRunner" type="Node"]
+script = ExtResource("1_verif")

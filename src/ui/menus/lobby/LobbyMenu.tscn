@@ -1,0 +1,149 @@
+[gd_scene format=3 uid="uid://bf28tydkokrwf"]
+
+[ext_resource type="Script" path="res://src/ui/menus/lobby/LobbyMenu.cs" id="1_lobby"]
+
+[node name="LobbyMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_lobby")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0627451, 0.0784314, 0.109804, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 40
+
+[node name="MainLayout" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="HeaderContainer" type="VBoxContainer" parent="MarginContainer/MainLayout"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/MainLayout/HeaderContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "MATCH LOBBY — 6v6 TEAM DEATHMATCH"
+
+[node name="RoomStatusLabel" type="Label" parent="MarginContainer/MainLayout/HeaderContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.72, 0.8, 1)
+theme_override_font_sizes/font_size = 14
+text = "Players: 1/12"
+
+[node name="HSeparator1" type="HSeparator" parent="MarginContainer/MainLayout"]
+layout_mode = 2
+
+[node name="TeamsContainer" type="HBoxContainer" parent="MarginContainer/MainLayout"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 24
+
+[node name="TeamAlphaPanel" type="PanelContainer" parent="MarginContainer/MainLayout/TeamsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Margin" type="MarginContainer" parent="MarginContainer/MainLayout/TeamsContainer/TeamAlphaPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer/MainLayout/TeamsContainer/TeamAlphaPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="AlphaTitle" type="Label" parent="MarginContainer/MainLayout/TeamsContainer/TeamAlphaPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 0.65, 1, 1)
+theme_override_font_sizes/font_size = 18
+text = "TEAM ALPHA (BLUE)"
+
+[node name="AlphaRosterList" type="ItemList" parent="MarginContainer/MainLayout/TeamsContainer/TeamAlphaPanel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="JoinAlphaButton" type="Button" parent="MarginContainer/MainLayout/TeamsContainer/TeamAlphaPanel/Margin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "JOIN TEAM ALPHA"
+
+[node name="TeamBravoPanel" type="PanelContainer" parent="MarginContainer/MainLayout/TeamsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Margin" type="MarginContainer" parent="MarginContainer/MainLayout/TeamsContainer/TeamBravoPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer/MainLayout/TeamsContainer/TeamBravoPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BravoTitle" type="Label" parent="MarginContainer/MainLayout/TeamsContainer/TeamBravoPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.35, 0.35, 1)
+theme_override_font_sizes/font_size = 18
+text = "TEAM BRAVO (RED)"
+
+[node name="BravoRosterList" type="ItemList" parent="MarginContainer/MainLayout/TeamsContainer/TeamBravoPanel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="JoinBravoButton" type="Button" parent="MarginContainer/MainLayout/TeamsContainer/TeamBravoPanel/Margin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "JOIN TEAM BRAVO"
+
+[node name="HSeparator2" type="HSeparator" parent="MarginContainer/MainLayout"]
+layout_mode = 2
+
+[node name="FooterBar" type="HBoxContainer" parent="MarginContainer/MainLayout"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="LeaveLobbyButton" type="Button" parent="MarginContainer/MainLayout/FooterBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 40)
+layout_mode = 2
+text = "LEAVE LOBBY"
+
+[node name="Spacer" type="Control" parent="MarginContainer/MainLayout/FooterBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StartMatchButton" type="Button" parent="MarginContainer/MainLayout/FooterBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "START MATCH"

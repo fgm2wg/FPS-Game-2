@@ -1,0 +1,145 @@
+[gd_scene format=3 uid="uid://bmtji62gjnise"]
+
+[ext_resource type="Script" uid="uid://ihufspfsr7kb" path="res://src/ui/hud/scoreboard/Scoreboard.cs" id="1_scrbd"]
+
+[node name="Scoreboard" type="Control" unique_id=315777053]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_scrbd")
+
+[node name="DarkBackdrop" type="ColorRect" parent="." unique_id=1893663703]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.04, 0.05, 0.08, 0.75)
+
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=1739231379]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="PanelContainer" type="PanelContainer" parent="CenterContainer" unique_id=264678740]
+custom_minimum_size = Vector2(920, 360)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="CenterContainer/PanelContainer" unique_id=43469718]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="CenterContainer/PanelContainer/Margin" unique_id=1355496077]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="HeaderBar" type="HBoxContainer" parent="CenterContainer/PanelContainer/Margin/VBox" unique_id=1978843190]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/PanelContainer/Margin/VBox/HeaderBar" unique_id=1172631356]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "6v6 TEAM DEATHMATCH"
+
+[node name="Spacer" type="Control" parent="CenterContainer/PanelContainer/Margin/VBox/HeaderBar" unique_id=2052646166]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="TimeContainer" type="HBoxContainer" parent="CenterContainer/PanelContainer/Margin/VBox/HeaderBar" unique_id=1495425737]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="TimeTitle" type="Label" parent="CenterContainer/PanelContainer/Margin/VBox/HeaderBar/TimeContainer" unique_id=46365110]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.7, 0.78, 1)
+theme_override_font_sizes/font_size = 13
+text = "TIME REMAINING: "
+
+[node name="ClockLabel" type="Label" parent="CenterContainer/PanelContainer/Margin/VBox/HeaderBar/TimeContainer" unique_id=2121586367]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "20:00"
+
+[node name="HSeparator1" type="HSeparator" parent="CenterContainer/PanelContainer/Margin/VBox" unique_id=490719414]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="ScoreHeaders" type="HBoxContainer" parent="CenterContainer/PanelContainer/Margin/VBox" unique_id=830677686]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 16
+
+[node name="AlphaScoreHeader" type="HBoxContainer" parent="CenterContainer/PanelContainer/Margin/VBox/ScoreHeaders" unique_id=328591804]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/Margin/VBox/ScoreHeaders/AlphaScoreHeader" unique_id=486335238]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.35, 0.7, 1, 1)
+theme_override_font_sizes/font_size = 15
+text = "TEAM ALPHA (BLUE): "
+
+[node name="AlphaHeaderScoreLabel" type="Label" parent="CenterContainer/PanelContainer/Margin/VBox/ScoreHeaders/AlphaScoreHeader" unique_id=1730130603]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.35, 0.7, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "0 / 100"
+
+[node name="BravoScoreHeader" type="HBoxContainer" parent="CenterContainer/PanelContainer/Margin/VBox/ScoreHeaders" unique_id=14942247]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/Margin/VBox/ScoreHeaders/BravoScoreHeader" unique_id=1991182021]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.38, 0.38, 1)
+theme_override_font_sizes/font_size = 15
+text = "TEAM BRAVO (RED): "
+
+[node name="BravoHeaderScoreLabel" type="Label" parent="CenterContainer/PanelContainer/Margin/VBox/ScoreHeaders/BravoScoreHeader" unique_id=1357615409]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.38, 0.38, 1)
+theme_override_font_sizes/font_size = 16
+text = "0 / 100"
+
+[node name="TreesContainer" type="HBoxContainer" parent="CenterContainer/PanelContainer/Margin/VBox" unique_id=331613325]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+theme_override_constants/separation = 16
+
+[node name="AlphaTree" type="Tree" parent="CenterContainer/PanelContainer/Margin/VBox/TreesContainer" unique_id=2043070692]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+focus_mode = 0
+
+[node name="BravoTree" type="Tree" parent="CenterContainer/PanelContainer/Margin/VBox/TreesContainer" unique_id=1475592744]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+focus_mode = 0
