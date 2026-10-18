@@ -316,7 +316,7 @@ public static class AssetIntegrationTests
 
         string[] streakAudios = {
             "res://assets/audio/sfx/scorestreaks/a10_strafe.mp3",
-            "res://assets/audio/sfx/scorestreaks/c17_flyby.mp3",
+            "res://assets/audio/sfx/scorestreaks/c17_flyby.wav",
             "res://assets/audio/sfx/scorestreaks/radio_confirm.mp3"
         };
         foreach (var audioPath in streakAudios)

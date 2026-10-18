@@ -20,6 +20,7 @@ public partial class ConnectionMenu : Control
     private Button _soloGymButton = null!;
     private Button _soloTerrainButton = null!;
     private Button _dedicatedButton = null!;
+    private Button _exitButton = null!;
     private Label _statusLabel = null!;
 
     public override void _Ready()
@@ -32,6 +33,7 @@ public partial class ConnectionMenu : Control
         _soloGymButton = GetNode<Button>("%SoloGymButton");
         _soloTerrainButton = GetNode<Button>("%SoloTerrainButton");
         _dedicatedButton = GetNode<Button>("%DedicatedButton");
+        _exitButton = GetNode<Button>("%ExitButton");
         _statusLabel = GetNode<Label>("%StatusLabel");
 
         _hostButton.Pressed += OnHostButtonPressed;
@@ -39,6 +41,7 @@ public partial class ConnectionMenu : Control
         _soloGymButton.Pressed += OnSoloGymButtonPressed;
         _soloTerrainButton.Pressed += OnSoloTerrainButtonPressed;
         _dedicatedButton.Pressed += OnDedicatedButtonPressed;
+        _exitButton.Pressed += OnExitButtonPressed;
 
         if (NetworkManager.Instance != null)
         {
@@ -57,6 +60,7 @@ public partial class ConnectionMenu : Control
         _soloGymButton.Pressed -= OnSoloGymButtonPressed;
         _soloTerrainButton.Pressed -= OnSoloTerrainButtonPressed;
         _dedicatedButton.Pressed -= OnDedicatedButtonPressed;
+        _exitButton.Pressed -= OnExitButtonPressed;
 
         if (NetworkManager.Instance != null)
         {
@@ -176,6 +180,12 @@ public partial class ConnectionMenu : Control
         _soloGymButton.Disabled = !enabled;
         _soloTerrainButton.Disabled = !enabled;
         _dedicatedButton.Disabled = !enabled;
+        _exitButton.Disabled = !enabled;
+    }
+
+    private void OnExitButtonPressed()
+    {
+        GetTree().Quit();
     }
 
     private void UpdateStatus(string message)

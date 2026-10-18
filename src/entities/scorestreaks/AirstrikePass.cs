@@ -35,11 +35,12 @@ public partial class AirstrikePass : Node3D
 
     // Cinematic flight parameters (~116 knots, extended approach and egress)
     private const float Speed = 60.0f;
-    private const float ApproachDist = 720.0f;
-    private const float EgressDist = 820.0f;
+    private const float ApproachDist = 800.0f;
+    private const float EgressDist = 850.0f;
 
-    private float _approachHeight = 195.0f;
-    private float _egressHeight = 185.0f;
+    private float _approachHeight = 220.0f;
+    private float _egressHeight = 220.0f;
+    private float _peakHeight = 110.0f;
 
     private const float StrafeDuration = 1.5f; // Exactly 1.5s firing window
     private const float ShotInterval = 0.080f; // ~12-13 shots/sec per jet
@@ -90,8 +91,8 @@ public partial class AirstrikePass : Node3D
 
         // Maintain safe altitude as high as the C-17 cargo plane (~200m+ above sea level)
         var tree = (IsInsideTree() ? GetTree() : null) ?? Engine.GetMainLoop() as SceneTree;
-        float peak = ScorestreakManager.GetMapPeakHeight(tree);
-        _approachHeight = Mathf.Max(peak + 95.0f, _strikeCenter.Y + 125.0f);
+        _peakHeight = ScorestreakManager.GetMapPeakHeight(tree);
+        _approachHeight = Mathf.Max(_peakHeight + 110.0f, _strikeCenter.Y + 160.0f);
         _egressHeight = _approachHeight;
 
         _cachedGroundQuery = PhysicsRayQueryParameters3D.Create(Vector3.Zero, Vector3.Zero, 1 | 2);
@@ -143,26 +144,29 @@ public partial class AirstrikePass : Node3D
 
     private Vector3 ComputeJetPosition(int jetIndex, float d)
     {
-        float cruiseAlt = _approachHeight;
-        const float dipStartD = -420.0f;
-        const float strafeStartD = -180.0f;
-        const float strafeEndD = -90.0f;
-        const float egressLevelD = 280.0f;
-        const float egressStartD = 30.0f;
+        const float dipStartD = -560.0f;
+        const float strafeStartD = -430.0f;
+        const float strafeEndD = -340.0f;
+        const float egressLevelD = 180.0f;
+        const float egressStartD = 0.0f;
 
-        float yFire = _strikeCenter.Y + 86.0f;
+        // Shallow dive parameters:
+        // Strafe run: -430m to -340m (90m distance = 1.50s at 60m/s).
+        // Dive slope mDive = -0.38 (~20.8 degrees shallow dive angle).
         const float mDive = -0.38f;
-        float yEnd = yFire + mDive * (strafeEndD - strafeStartD); // ~51.8m above strike center
+        float yEnd = Mathf.Max(_peakHeight + 40.0f, _strikeCenter.Y + 130.0f);
+        float yFire = yEnd - mDive * (strafeEndD - strafeStartD);
+        float cruiseAlt = yFire + 30.0f;
 
         float height;
         if (d < dipStartD)
         {
-            // Phase 1: Level straight approach far away at high cruise altitude
+            // Phase 1: High level cruise approach
             height = cruiseAlt;
         }
         else if (d < strafeStartD)
         {
-            // Phase 2: Smooth continuous nose dip transitioning from cruise (slope 0) to dive (slope mDive)
+            // Phase 2: Smooth C1 Hermite curve dipping nose down from level cruise (slope 0) to dive (slope mDive)
             float u = (d - dipStartD) / (strafeStartD - dipStartD);
             float deltaD = strafeStartD - dipStartD;
             float m1 = mDive * deltaD;
@@ -172,12 +176,12 @@ public partial class AirstrikePass : Node3D
         }
         else if (d <= strafeEndD)
         {
-            // Phase 3: Firing dive (1.5s strafe run: -180m to -90m at 60m/s = 90m = 1.5s)
+            // Phase 3: Shallow linear dive directly facing and aiming at the target
             height = yFire + mDive * (d - strafeStartD);
         }
         else if (d < egressLevelD)
         {
-            // Phase 4: Smooth C1 Hermite pull-up out of dive into climb up to cruise altitude (apex ~45m above target)
+            // Phase 4: Smooth C1 Hermite pull-up out of dive into climbing egress up to cruise altitude
             float u = (d - strafeEndD) / (egressLevelD - strafeEndD);
             float deltaD = egressLevelD - strafeEndD;
             float m0 = mDive * deltaD;
@@ -198,7 +202,7 @@ public partial class AirstrikePass : Node3D
         {
             float distPast = d - egressStartD;
             float veerDir = jetIndex == 0 ? -1.0f : 1.0f;
-            float veerProgress = Mathf.Clamp(distPast / 380.0f, 0.0f, 1.0f);
+            float veerProgress = Mathf.Clamp(distPast / 420.0f, 0.0f, 1.0f);
             float smoothVeer = veerProgress * veerProgress * (3.0f - 2.0f * veerProgress);
             float lateralOffset = distPast * 0.45f * smoothVeer * veerDir;
             horizontalPos += rightVec * lateralOffset;
@@ -217,8 +221,10 @@ public partial class AirstrikePass : Node3D
         jet.Root.Position = pos;
 
         // Compute forward flight trajectory orientation with forward lookahead
+        // Velocity vector and nose orientation are strictly aligned for realistic flight
         Vector3 nextPos = ComputeJetPosition(jet.Index, d + 2.0f);
         Vector3 fwd = (nextPos - pos).Normalized();
+
         if (fwd.LengthSquared() > 0.001f)
         {
             Vector3 up = Vector3.Up;
@@ -226,11 +232,11 @@ public partial class AirstrikePass : Node3D
             Basis baseBasis = Basis.LookingAt(fwd, up);
 
             // Compute bank roll angle during egress turn
-            const float egressStartD = 30.0f;
+            const float egressStartD = 0.0f;
             if (d > egressStartD)
             {
                 float distPast = d - egressStartD;
-                float veerProgress = Mathf.Clamp(distPast / 380.0f, 0.0f, 1.0f);
+                float veerProgress = Mathf.Clamp(distPast / 420.0f, 0.0f, 1.0f);
                 float bankFactor = Mathf.Sin(veerProgress * Mathf.Pi);
                 float veerDir = jet.Index == 0 ? -1.0f : 1.0f;
                 // Jet 0 veering left (veerDir = -1) banks left; Jet 1 veering right (veerDir = +1) banks right
@@ -250,9 +256,9 @@ public partial class AirstrikePass : Node3D
         bool allFinished = true;
 
         float targetTime = ApproachDist / Speed;
-        // Strafe run: exactly -180m to -90m (1.50s at 60m/s)
-        float fireStartTime = targetTime - 3.0f; // -180m
-        float fireEndTime = targetTime - 1.5f;   // -90m
+        // Strafe run: exactly -430m to -340m (1.50s at 60m/s)
+        float fireStartTime = targetTime - (430.0f / Speed);
+        float fireEndTime = targetTime - (340.0f / Speed);
 
         for (int i = 0; i < _jets.Length; i++)
         {
@@ -297,9 +303,9 @@ public partial class AirstrikePass : Node3D
 
             // 3. Audio egress fadeout as jet climbs and veers away
             float distFromTarget = (t - targetTime) * Speed;
-            if (distFromTarget > 180.0f && jet.Audio != null)
+            if (distFromTarget > 200.0f && jet.Audio != null)
             {
-                float fadeFraction = Mathf.Clamp((distFromTarget - 180.0f) / 380.0f, 0.0f, 1.0f);
+                float fadeFraction = Mathf.Clamp((distFromTarget - 200.0f) / 450.0f, 0.0f, 1.0f);
                 jet.Audio.VolumeDb = Mathf.Lerp(0.0f, -42.0f, fadeFraction);
             }
 

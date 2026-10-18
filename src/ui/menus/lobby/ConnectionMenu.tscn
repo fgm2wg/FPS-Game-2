@@ -150,6 +150,12 @@ custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 text = "START DEDICATED SERVER"
 
+[node name="ExitButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/ButtonsContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+text = "EXIT TO DESKTOP"
+
 [node name="HSeparator2" type="HSeparator" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 

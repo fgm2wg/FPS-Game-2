@@ -40,7 +40,8 @@ public partial class ScorestreakManager : Node
         Mk84Scene ??= ResourceLoader.Load<PackedScene>("res://assets/models/scorestreaks/mk84.glb");
 
         A10Audio ??= ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/scorestreaks/a10_strafe.mp3");
-        C17Audio ??= ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/scorestreaks/c17_flyby.mp3");
+        C17Audio ??= ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/scorestreaks/c17_flyby.wav")
+                  ?? ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/scorestreaks/c17_flyby.mp3");
         RadioAudio ??= ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/scorestreaks/radio_confirm.mp3");
     }
 

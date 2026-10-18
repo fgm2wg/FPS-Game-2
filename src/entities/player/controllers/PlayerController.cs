@@ -181,6 +181,8 @@ public partial class PlayerController : CharacterBody3D
     private float _fireCooldownTimer;
     private float _reloadTimer;
     private float _respawnTimer;
+    private float _weaponUnholsterTimer;
+    private bool _mustReleaseFireAfterPlacement;
     private const float RespawnDuration = 3.0f;
     private const float VoidKillThresholdY = -350.0f;
 
@@ -805,6 +807,12 @@ public partial class PlayerController : CharacterBody3D
             return;
         }
 
+        // Scorestreak confirm weapon unholster delay
+        if (_weaponUnholsterTimer > 0.0f)
+        {
+            _weaponUnholsterTimer -= dt;
+        }
+
         if (_activePlacement != StreakPlacementType.None)
         {
             UpdatePlacementMarkerPosition();
@@ -907,7 +915,7 @@ public partial class PlayerController : CharacterBody3D
             }
             if (_viewmodel != null)
             {
-                bool shouldShowViewmodel = _activePlacement == StreakPlacementType.None;
+                bool shouldShowViewmodel = _activePlacement == StreakPlacementType.None && _weaponUnholsterTimer <= 0.0f;
                 if (_viewmodel.Visible != shouldShowViewmodel)
                 {
                     _viewmodel.Visible = shouldShowViewmodel;
@@ -1069,9 +1077,19 @@ public partial class PlayerController : CharacterBody3D
     {
         if (IsDead || (_pauseMenu != null && _pauseMenu.IsOpen) ||
             (MatchManager.Instance != null && MatchManager.Instance.IsMovementLocked) ||
-            _activePlacement != StreakPlacementType.None)
+            _activePlacement != StreakPlacementType.None ||
+            _weaponUnholsterTimer > 0.0f)
         {
             return;
+        }
+
+        if (_mustReleaseFireAfterPlacement)
+        {
+            if (Input.IsActionPressed("fire_primary") || Input.IsMouseButtonPressed(MouseButton.Left))
+            {
+                return;
+            }
+            _mustReleaseFireAfterPlacement = false;
         }
 
         bool fireRequested = FireMode == "AUTO"
@@ -2362,6 +2380,9 @@ public partial class PlayerController : CharacterBody3D
     {
         _activePlacement = StreakPlacementType.None;
         _bombingRunCenterLocked = false;
+        _weaponUnholsterTimer = 0.0f;
+        _fireCooldownTimer = Mathf.Max(_fireCooldownTimer, 0.35f);
+        _mustReleaseFireAfterPlacement = true;
         if (!_isEmoting && _viewmodel != null)
         {
             _viewmodel.Visible = true;
@@ -2400,10 +2421,9 @@ public partial class PlayerController : CharacterBody3D
             }
             _bombingRunCenterLocked = false;
             _activePlacement = StreakPlacementType.None;
-            if (!_isEmoting && _viewmodel != null)
-            {
-                _viewmodel.Visible = true;
-            }
+            _weaponUnholsterTimer = 0.25f;
+            _fireCooldownTimer = Mathf.Max(_fireCooldownTimer, 0.45f);
+            _mustReleaseFireAfterPlacement = true;
             return;
         }
 
@@ -2438,10 +2458,9 @@ public partial class PlayerController : CharacterBody3D
             _placementMarker.Visible = false;
         }
         _activePlacement = StreakPlacementType.None;
-        if (!_isEmoting && _viewmodel != null)
-        {
-            _viewmodel.Visible = true;
-        }
+        _weaponUnholsterTimer = 0.25f;
+        _fireCooldownTimer = Mathf.Max(_fireCooldownTimer, 0.45f);
+        _mustReleaseFireAfterPlacement = true;
     }
 
     private void UpdatePlacementMarkerPosition()

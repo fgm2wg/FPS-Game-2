@@ -114,9 +114,15 @@ public partial class ScorestreakWidget : Control
 
         if (_cachedFont != null)
         {
-            string label = _carePackageCount > 1 ? $"[5] DROP x{_carePackageCount}" : (_carePackageCount > 0 ? "[5] PACKAGE" : "PACKAGE");
-            Vector2 textSz = _cachedFont.GetStringSize(label, HorizontalAlignment.Center, -1, 9);
-            DrawString(_cachedFont, new Vector2(badgeX + (badgeWidth - textSz.X) * 0.5f, pkgTopY + (slotHeight + textSz.Y) * 0.5f - 2.0f), label, HorizontalAlignment.Left, -1, 9, pkgActive ? activeTextColor : inactiveTextColor);
+            string label = _carePackageCount > 1 ? $"[5] CARE PKG x{_carePackageCount}" : (_carePackageCount > 0 ? "[5] CARE PKG" : "CARE PACKAGE");
+            int fSize = 8;
+            Vector2 textSz = _cachedFont.GetStringSize(label, HorizontalAlignment.Center, -1, fSize);
+            if (textSz.X > badgeWidth - 4.0f)
+            {
+                fSize = 7;
+                textSz = _cachedFont.GetStringSize(label, HorizontalAlignment.Center, -1, fSize);
+            }
+            DrawString(_cachedFont, new Vector2(badgeX + (badgeWidth - textSz.X) * 0.5f, pkgTopY + (slotHeight + textSz.Y) * 0.5f - 2.0f), label, HorizontalAlignment.Left, -1, fSize, pkgActive ? activeTextColor : inactiveTextColor);
         }
 
         // Segments on right for Care Package: 1 single segment (kill 4)

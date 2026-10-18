@@ -87,7 +87,7 @@ public partial class BombingRunPass : Node3D
 
         // Preload assets
         _b52Scene ??= ScorestreakManager.B52Scene ?? ResourceLoader.Load<PackedScene>("res://assets/models/scorestreaks/b52.glb");
-        _flybyAudio ??= ScorestreakManager.C17Audio ?? ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/scorestreaks/c17_flyby.mp3");
+        _flybyAudio ??= ScorestreakManager.C17Audio ?? ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/scorestreaks/c17_flyby.wav");
 
         // Calculate ballistic lead compensation:
         // Free fall time under gravity g = 18 m/s^2 from cruise altitude to strike center elevation

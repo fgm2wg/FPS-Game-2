@@ -75,7 +75,7 @@ public partial class CarePackageDrop : Node3D
         _targetMarker.SetAutoRemove(5.0f, 1.0f);
 
         _c17Scene ??= ScorestreakManager.C17Scene ?? ResourceLoader.Load<PackedScene>("res://assets/models/scorestreaks/c17.glb");
-        _c17Audio ??= ScorestreakManager.C17Audio ?? ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/scorestreaks/c17_flyby.mp3");
+        _c17Audio ??= ScorestreakManager.C17Audio ?? ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/scorestreaks/c17_flyby.wav");
 
         _planeRoot = new Node3D { Name = "C17_Plane" };
         AddChild(_planeRoot);

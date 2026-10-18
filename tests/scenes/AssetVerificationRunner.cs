@@ -971,6 +971,7 @@ public partial class AssetVerificationRunner : Node
             GetTree().Quit(1);
             return;
         }
+        player._Process(0.3); // Advance time past weapon unholster delay
         if (streakVm != null && !streakVm.Visible)
         {
             GD.PrintErr("[TEST FAILED] Expected viewmodel to be restored after confirming strike!");
@@ -978,6 +979,26 @@ public partial class AssetVerificationRunner : Node
             return;
         }
         GD.Print("  [OK] Bombing Run Key 7 two-click placement, gun holstering, and execution confirmed.");
+
+        // Verify ConnectionMenu scene & Exit to Desktop button
+        var connScene = ResourceLoader.Load<PackedScene>("res://src/ui/menus/lobby/ConnectionMenu.tscn");
+        if (connScene == null)
+        {
+            GD.PrintErr("[TEST FAILED] ConnectionMenu.tscn failed to load!");
+            GetTree().Quit(1);
+            return;
+        }
+        var connMenu = connScene.Instantiate<Control>();
+        AddChild(connMenu);
+        var exitBtn = connMenu.FindChild("ExitButton", true, false) as Button;
+        if (exitBtn == null || exitBtn.Text != "EXIT TO DESKTOP")
+        {
+            GD.PrintErr("[TEST FAILED] ExitButton missing or incorrect text in ConnectionMenu.tscn!");
+            GetTree().Quit(1);
+            return;
+        }
+        connMenu.QueueFree();
+        GD.Print("  [OK] ConnectionMenu verified with EXIT TO DESKTOP button.");
 
         var streakWidget = new FPSGame.UI.HUD.Scorestreaks.ScorestreakWidget { Name = "TestStreakWidget" };
         AddChild(streakWidget);
