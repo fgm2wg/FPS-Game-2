@@ -36,6 +36,7 @@ public partial class MinimapWidget : Control
         if (_viewport != null)
         {
             _viewport.DebugDraw = SubViewport.DebugDrawEnum.Unshaded;
+            _viewport.AudioListenerEnable3D = false;
         }
 
         if (_minimapCamera != null)

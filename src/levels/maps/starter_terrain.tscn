@@ -160,16 +160,16 @@ shape = SubResource("BoxShape3D_boundary_ns")
 [node name="SpawnPoints" type="Node3D" parent="."]
 
 [node name="SpawnAlpha_1" type="Marker3D" parent="SpawnPoints"]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 215, 106, -1822)
+transform = Transform3D(-0.976, 0, -0.217, 0, 1, 0, 0.217, 0, -0.976, 215, 106, -1822)
 
 [node name="SpawnAlpha_2" type="Marker3D" parent="SpawnPoints"]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 218, 105.5, -1825)
+transform = Transform3D(-0.976, 0, -0.217, 0, 1, 0, 0.217, 0, -0.976, 218, 105.5, -1825)
 
 [node name="SpawnBravo_1" type="Marker3D" parent="SpawnPoints"]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 515, 66, -1822)
+transform = Transform3D(0.976, 0, 0.217, 0, 1, 0, -0.217, 0, 0.976, 280, 3.5, -1529)
 
 [node name="SpawnBravo_2" type="Marker3D" parent="SpawnPoints"]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 512, 76.5, -1825)
+transform = Transform3D(0.976, 0, 0.217, 0, 1, 0, -0.217, 0, 0.976, 283, 3.5, -1532)
 
 [node name="Players" type="Node3D" parent="."]
 
@@ -185,3 +185,4 @@ SpawnPointsContainerPath = NodePath("../SpawnPoints")
 
 [node name="MatchManager" type="Node" parent="."]
 script = ExtResource("3_match")
+

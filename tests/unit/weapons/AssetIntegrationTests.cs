@@ -149,6 +149,50 @@ public static class AssetIntegrationTests
             instance.QueueFree();
         }
 
+        // 6b. Verify MGL Model
+        var mgl = ResourceLoader.Load<PackedScene>("res://assets/models/weapons/MGL.glb");
+        if (mgl == null)
+        {
+            GD.PrintErr("[AssetTest] Failed to load MGL.glb");
+            allPassed = false;
+        }
+        else
+        {
+            var instance = mgl.Instantiate<Node3D>();
+            void Dump(Node n, int indent)
+            {
+                string info = n is Node3D n3 ? $" [Pos={n3.Position}, Rot={n3.RotationDegrees}, Scale={n3.Scale}]" : "";
+                GD.Print($"{new string(' ', indent * 2)}- {n.Name} ({n.GetType().Name}){info}");
+                foreach (Node child in n.GetChildren())
+                    Dump(child, indent + 1);
+            }
+            GD.Print("[AssetTest] MGL hierarchy:");
+            Dump(instance, 1);
+
+            Aabb meshBounds = new Aabb();
+            bool hasMesh = false;
+            foreach (Node c in instance.FindChildren("*", "MeshInstance3D"))
+            {
+                if (c is MeshInstance3D mi && mi.Mesh != null)
+                {
+                    // Compute transform relative to instance root
+                    Transform3D rel = Transform3D.Identity;
+                    Node cur = mi;
+                    while (cur != instance && cur is Node3D cur3)
+                    {
+                        rel = cur3.Transform * rel;
+                        cur = cur.GetParent();
+                    }
+                    Aabb b = rel * mi.Mesh.GetAabb();
+                    if (!hasMesh) { meshBounds = b; hasMesh = true; }
+                    else { meshBounds = meshBounds.Merge(b); }
+                    GD.Print($"    [Mesh] {mi.Name}: RelBounds Size={b.Size}, Center={b.GetCenter()}, Min={b.Position}, Max={b.End}");
+                }
+            }
+            GD.Print($"    [MGL Total Bounds in Model Space] Size={meshBounds.Size}, Center={meshBounds.GetCenter()}, Min={meshBounds.Position}, Max={meshBounds.End}");
+            instance.QueueFree();
+        }
+
         // 7. Verify Gunshot Audio
         var audio = ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/weapons/gunshot.mp3");
         if (audio == null)
@@ -159,6 +203,132 @@ public static class AssetIntegrationTests
         else
         {
             GD.Print($"[AssetTest] gunshot.mp3 loaded successfully! Length: {audio.GetLength():F2}s");
+        }
+
+        var mglAudio = ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/weapons/mgl_shot.mp3");
+        if (mglAudio == null)
+        {
+            GD.PrintErr("[AssetTest] Failed to load mgl_shot.mp3");
+            allPassed = false;
+        }
+        else
+        {
+            GD.Print($"[AssetTest] mgl_shot.mp3 loaded successfully! Length: {mglAudio.GetLength():F2}s");
+        }
+
+        // 8. Verify Realistic Explosion Assets and Entities
+        FPSGame.VFX.Impacts.ExplosionAssetGenerator.EnsureAssetsExist();
+
+        var explosionAudio = ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/weapons/explosion.mp3");
+        if (explosionAudio == null)
+        {
+            GD.PrintErr("[AssetTest] Failed to load explosion.mp3");
+            allPassed = false;
+        }
+        else
+        {
+            GD.Print($"[AssetTest] explosion.mp3 verified! Length: {explosionAudio.GetLength():F2}s");
+        }
+
+        var smokeTex = FPSGame.VFX.Impacts.ExplosionAssetGenerator.GetSmokeTexture();
+        var sparkTex = FPSGame.VFX.Impacts.ExplosionAssetGenerator.GetSparkTexture();
+        var scorchTex = FPSGame.VFX.Impacts.ExplosionAssetGenerator.GetScorchTexture();
+        if (smokeTex == null || sparkTex == null || scorchTex == null)
+        {
+            GD.PrintErr("[AssetTest] Failed to load one or more explosion textures (smoke/spark/scorch)!");
+            allPassed = false;
+        }
+        else
+        {
+            GD.Print($"[AssetTest] Explosion textures verified (Smoke: {smokeTex.GetSize()}, Spark: {sparkTex.GetSize()}, Scorch: {scorchTex.GetSize()})");
+        }
+
+        var grenade = new FPSGame.Weapons.Projectiles.GrenadeProjectile();
+        if (grenade.Mass < 0.3f || grenade.Mass > 0.5f)
+        {
+            GD.PrintErr($"[AssetTest] Grenade mass unexpected: {grenade.Mass}");
+            allPassed = false;
+        }
+        else
+        {
+            GD.Print($"[AssetTest] GrenadeProjectile verified (Mass={grenade.Mass}kg, CCD={grenade.ContinuousCd})");
+        }
+        grenade.QueueFree();
+
+        var mglProj = new FPSGame.Weapons.Projectiles.MglProjectile();
+        if (mglProj.Mass < 0.2f || mglProj.Mass > 0.3f)
+        {
+            GD.PrintErr($"[AssetTest] MglProjectile mass unexpected: {mglProj.Mass}");
+            allPassed = false;
+        }
+        else
+        {
+            GD.Print($"[AssetTest] MglProjectile verified (Mass={mglProj.Mass}kg, CCD={mglProj.ContinuousCd})");
+        }
+        mglProj.QueueFree();
+
+        var explosionEffect = new FPSGame.VFX.Impacts.ExplosionEffect();
+        GD.Print("[AssetTest] ExplosionEffect created and verified.");
+        explosionEffect.QueueFree();
+
+        // 8. Verify Scorestreak Assets
+        string[] streakModels = {
+            "res://assets/models/scorestreaks/a10.glb",
+            "res://assets/models/scorestreaks/c17.glb",
+            "res://assets/models/scorestreaks/mq1_uav.glb",
+            "res://assets/models/scorestreaks/supply_crate.glb",
+            "res://assets/models/scorestreaks/parachute.glb"
+        };
+
+        foreach (var path in streakModels)
+        {
+            var scene = ResourceLoader.Load<PackedScene>(path);
+            if (scene == null)
+            {
+                GD.PrintErr($"[AssetTest] Failed to load scorestreak model: {path}");
+                allPassed = false;
+                continue;
+            }
+            var inst = scene.Instantiate<Node3D>();
+            Aabb meshBounds = new Aabb();
+            bool hasMesh = false;
+            foreach (Node c in inst.FindChildren("*", "MeshInstance3D"))
+            {
+                if (c is MeshInstance3D mi && mi.Mesh != null)
+                {
+                    Transform3D rel = Transform3D.Identity;
+                    Node cur = mi;
+                    while (cur != inst && cur is Node3D cur3)
+                    {
+                        rel = cur3.Transform * rel;
+                        cur = cur.GetParent();
+                    }
+                    Aabb b = rel * mi.Mesh.GetAabb();
+                    if (!hasMesh) { meshBounds = b; hasMesh = true; }
+                    else { meshBounds = meshBounds.Merge(b); }
+                }
+            }
+            GD.Print($"[AssetTest] Model {System.IO.Path.GetFileName(path)}: Bounds Size={meshBounds.Size}, Center={meshBounds.GetCenter()}");
+            inst.QueueFree();
+        }
+
+        string[] streakAudios = {
+            "res://assets/audio/sfx/scorestreaks/a10_strafe.mp3",
+            "res://assets/audio/sfx/scorestreaks/c17_flyby.mp3",
+            "res://assets/audio/sfx/scorestreaks/radio_confirm.mp3"
+        };
+        foreach (var audioPath in streakAudios)
+        {
+            var st = ResourceLoader.Load<AudioStream>(audioPath);
+            if (st == null)
+            {
+                GD.PrintErr($"[AssetTest] Failed to load scorestreak audio: {audioPath}");
+                allPassed = false;
+            }
+            else
+            {
+                GD.Print($"[AssetTest] Audio {System.IO.Path.GetFileName(audioPath)} loaded! Length={st.GetLength():F2}s");
+            }
         }
 
         return allPassed;

@@ -19,6 +19,7 @@ public partial class CharacterModel : Node3D
     private Node3D? _weaponModel;
     private Node3D? _mp5WorldModel;
     private Node3D? _lmgWorldModel;
+    private Node3D? _mglWorldModel;
     private string _currentEquippedWeapon = "MP5";
     private Node3D? _muzzleMarker;
     private MeshInstance3D? _muzzleFlashMesh;
@@ -192,12 +193,29 @@ public partial class CharacterModel : Node3D
             _lmgWorldModel.Visible = false;
             parent.AddChild(_lmgWorldModel);
         }
+
+        var mglScene = ResourceLoader.Load<PackedScene>("res://assets/models/weapons/MGL.glb");
+        if (mglScene != null)
+        {
+            _mglWorldModel = mglScene.Instantiate<Node3D>();
+            _mglWorldModel.Name = "MGL_Rifle";
+            _mglWorldModel.Position = new Vector3(0.015f, 0.045f, -0.02f);
+            _mglWorldModel.RotationDegrees = new Vector3(-1.24f, 177.32f, -79.32f);
+            _mglWorldModel.Scale = Vector3.One;
+            _mglWorldModel.Visible = false;
+            parent.AddChild(_mglWorldModel);
+        }
     }
 
     public void SetEquippedWeapon(string weaponName)
     {
         _currentEquippedWeapon = weaponName;
-        _weaponModel = weaponName == "LMG" ? _lmgWorldModel : _mp5WorldModel;
+        _weaponModel = weaponName switch
+        {
+            "LMG" => _lmgWorldModel,
+            "MGL" => _mglWorldModel,
+            _ => _mp5WorldModel
+        };
         bool shouldBeVisible = !_isDead && string.IsNullOrEmpty(_activeEmote);
         UpdateWeaponVisibility(shouldBeVisible);
     }
@@ -208,6 +226,7 @@ public partial class CharacterModel : Node3D
         {
             if (_mp5WorldModel != null) _mp5WorldModel.Visible = false;
             if (_lmgWorldModel != null) _lmgWorldModel.Visible = false;
+            if (_mglWorldModel != null) _mglWorldModel.Visible = false;
         }
         else
         {
@@ -215,11 +234,19 @@ public partial class CharacterModel : Node3D
             {
                 if (_lmgWorldModel != null) _lmgWorldModel.Visible = true;
                 if (_mp5WorldModel != null) _mp5WorldModel.Visible = false;
+                if (_mglWorldModel != null) _mglWorldModel.Visible = false;
+            }
+            else if (_currentEquippedWeapon == "MGL")
+            {
+                if (_mglWorldModel != null) _mglWorldModel.Visible = true;
+                if (_mp5WorldModel != null) _mp5WorldModel.Visible = false;
+                if (_lmgWorldModel != null) _lmgWorldModel.Visible = false;
             }
             else
             {
                 if (_mp5WorldModel != null) _mp5WorldModel.Visible = true;
                 if (_lmgWorldModel != null) _lmgWorldModel.Visible = false;
+                if (_mglWorldModel != null) _mglWorldModel.Visible = false;
             }
         }
     }
@@ -250,6 +277,30 @@ public partial class CharacterModel : Node3D
         }
 
         _mannequinMesh.SetSurfaceOverrideMaterial(0, mat);
+    }
+
+    private static ShaderMaterial? _espMaterial;
+
+    public void SetEspHighlight(bool enabled)
+    {
+        if (_mannequinMesh == null) return;
+
+        if (enabled)
+        {
+            if (_espMaterial == null)
+            {
+                var shader = ResourceLoader.Load<Shader>("res://assets/shaders/vfx/esp_outline.gdshader");
+                if (shader != null)
+                {
+                    _espMaterial = new ShaderMaterial { Shader = shader };
+                }
+            }
+            _mannequinMesh.MaterialOverlay = _espMaterial;
+        }
+        else
+        {
+            _mannequinMesh.MaterialOverlay = null;
+        }
     }
 
     public void UpdateAnimationState(float horizontalSpeed, bool isOnFloor, bool isDead, bool isMovingBackward = false, bool isCrouched = false, string activeEmote = "")

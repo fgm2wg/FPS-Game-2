@@ -80,6 +80,11 @@ public partial class MatchHUD : Control
         Reticle = GetNode<ReticleWidget>("%ReticleWidget");
         Streaks = GetNode<ScorestreakWidget>("%ScorestreaksWidget");
 
+        _interactionContainer = GetNodeOrNull<Control>("%InteractionContainer");
+        _interactionLabel = GetNodeOrNull<Label>("%InteractionLabel");
+        _interactionProgressBar = GetNodeOrNull<ProgressBar>("%InteractionProgressBar");
+        if (_interactionContainer != null) _interactionContainer.Visible = false;
+
         int initialFps = Mathf.RoundToInt((float)Engine.GetFramesPerSecond());
         _fpsLabel.Text = $"{initialFps} FPS";
         _lastFps = initialFps;
@@ -136,6 +141,15 @@ public partial class MatchHUD : Control
                 _fpsLabel.Text = $"{currentFps} FPS";
             }
         }
+
+        if (_announcementTimer > 0.0f)
+        {
+            _announcementTimer -= dt;
+            if (_announcementTimer <= 0.0f && MatchManager.Instance?.CurrentState == MatchState.InProgress)
+            {
+                _centerBannerContainer.Visible = false;
+            }
+        }
     }
 
     public void UpdateHealth(float current, float max)
@@ -183,6 +197,50 @@ public partial class MatchHUD : Control
     public void UpdateScorestreakProgress(int currentStreakKills)
     {
         Streaks.SetStreakKills(currentStreakKills);
+    }
+
+    public void UpdateScorestreakProgress(int currentStreakKills, int uavCount, int carePackageCount, int airstrikeCount)
+    {
+        Streaks.SetStreakData(currentStreakKills, uavCount, carePackageCount, airstrikeCount);
+    }
+
+    private Control? _interactionContainer;
+    private Label? _interactionLabel;
+    private ProgressBar? _interactionProgressBar;
+    private float _announcementTimer;
+
+    public void ShowInteractionPrompt(string text, float progress)
+    {
+        EnsureInteractionUI();
+        if (_interactionContainer == null) return;
+
+        _interactionContainer.Visible = true;
+        if (_interactionLabel != null) _interactionLabel.Text = text;
+        if (_interactionProgressBar != null) _interactionProgressBar.Value = Mathf.Clamp(progress * 100.0f, 0.0f, 100.0f);
+    }
+
+    public void HideInteractionPrompt()
+    {
+        if (_interactionContainer != null)
+        {
+            _interactionContainer.Visible = false;
+        }
+    }
+
+    public void ShowAnnouncement(string message, float duration = 2.2f)
+    {
+        _bannerTitleLabel.Text = message;
+        _bannerCountdownLabel.Text = "";
+        _centerBannerContainer.Visible = true;
+        _announcementTimer = duration;
+    }
+
+    private void EnsureInteractionUI()
+    {
+        if (_interactionContainer != null) return;
+        _interactionContainer = GetNodeOrNull<Control>("%InteractionContainer");
+        _interactionLabel = GetNodeOrNull<Label>("%InteractionLabel");
+        _interactionProgressBar = GetNodeOrNull<ProgressBar>("%InteractionProgressBar");
     }
 
     public void ShowHitmarker(bool isHeadshot, bool isKill)

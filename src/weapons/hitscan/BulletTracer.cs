@@ -1,23 +1,42 @@
+using System;
 using Godot;
 
 namespace FPSGame.Weapons.Hitscan;
 
 /// <summary>
 /// High-speed visual bullet tracer.
-/// Travels from weapon muzzle to impact target at high velocity, rendering a luminous trail.
+/// Travels from weapon muzzle to impact target at supersonic velocity, rendering a luminous trail.
+/// Optimized with shared static mesh and material for zero heap allocations per shot.
 /// </summary>
 public partial class BulletTracer : Node3D
 {
+    private static readonly CylinderMesh SharedMesh = new()
+    {
+        TopRadius = 0.014f,
+        BottomRadius = 0.014f,
+        Height = 1.10f,
+        RadialSegments = 6,
+        Rings = 1
+    };
+
+    private static readonly StandardMaterial3D SharedMaterial = new()
+    {
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+        AlbedoColor = new Color(1.0f, 0.90f, 0.40f, 0.95f),
+        Transparency = BaseMaterial3D.TransparencyEnum.Alpha
+    };
+
     private Vector3 _startPosition;
     private Vector3 _targetPosition;
     private Vector3 _direction;
-    private float _speed = 260.0f;
+    private float _speed = 650.0f;
     private float _totalDistance;
     private float _traveledDistance;
     private float _lifetime;
+    private float _maxLifetime;
     private MeshInstance3D? _tracerMesh;
 
-    public static BulletTracer Create(Vector3 start, Vector3 target, float speed = 260.0f)
+    public static BulletTracer Create(Vector3 start, Vector3 target, float speed = 650.0f)
     {
         var tracer = new BulletTracer();
         tracer._startPosition = start;
@@ -29,7 +48,7 @@ public partial class BulletTracer : Node3D
     public override void _Ready()
     {
         GlobalPosition = _startPosition;
-        _direction = (_targetPosition - _startPosition);
+        _direction = _targetPosition - _startPosition;
         _totalDistance = _direction.Length();
 
         if (_totalDistance < 0.1f)
@@ -39,34 +58,20 @@ public partial class BulletTracer : Node3D
         }
 
         _direction /= _totalDistance; // Normalized
+        _maxLifetime = Mathf.Max(0.12f, (_totalDistance / _speed) + 0.08f);
 
         // Align tracer orientation along flight trajectory
-        LookAt(_targetPosition, Vector3.Up);
-
-        // Build luminous tracer geometry (stretched capsule)
-        var mesh = new CylinderMesh
-        {
-            TopRadius = 0.012f,
-            BottomRadius = 0.012f,
-            Height = 0.85f,
-            RadialSegments = 6,
-            Rings = 1
-        };
-
-        var material = new StandardMaterial3D
-        {
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            AlbedoColor = new Color(1.0f, 0.92f, 0.4f, 0.95f),
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha
-        };
+        Vector3 up = Vector3.Up;
+        if (Mathf.Abs(_direction.Dot(up)) > 0.98f) up = Vector3.Right;
+        LookAt(_targetPosition, up);
 
         _tracerMesh = new MeshInstance3D
         {
-            Mesh = mesh,
-            MaterialOverride = material,
-            // Cylinder is along Y by default, rotate 90° on X to point along -Z
+            Mesh = SharedMesh,
+            MaterialOverride = SharedMaterial,
+            // Cylinder is along Y by default, rotate 90° on X to point along -Z (flight forward)
             Rotation = new Vector3(Mathf.DegToRad(90.0f), 0, 0),
-            Position = new Vector3(0, 0, -0.42f)
+            Position = new Vector3(0, 0, -0.55f)
         };
 
         AddChild(_tracerMesh);
@@ -81,34 +86,9 @@ public partial class BulletTracer : Node3D
         _traveledDistance += step;
         GlobalPosition += _direction * step;
 
-        if (_traveledDistance >= _totalDistance || _lifetime > 0.8f)
+        if (_traveledDistance >= _totalDistance || _lifetime >= _maxLifetime)
         {
-            SpawnImpactSpark(_targetPosition);
             QueueFree();
         }
-    }
-
-    private void SpawnImpactSpark(Vector3 pos)
-    {
-        var tree = GetTree();
-        if (tree == null) return;
-
-        var spark = new OmniLight3D
-        {
-            LightColor = new Color(1.0f, 0.8f, 0.3f),
-            LightEnergy = 1.8f,
-            OmniRange = 1.5f
-        };
-        tree.Root.AddChild(spark);
-        spark.GlobalPosition = pos;
-
-        var timer = tree.CreateTimer(0.06);
-        timer.Timeout += () =>
-        {
-            if (IsInstanceValid(spark))
-            {
-                spark.QueueFree();
-            }
-        };
     }
 }

@@ -38,7 +38,17 @@ public partial class HurtboxComponent : Area3D
         }
     }
 
-    public bool IsDead => _health != null && _health.IsDead;
+    public bool IsDead
+    {
+        get
+        {
+            if (_player != null && _player.IsDead) return true;
+            if (_health != null && _health.IsDead) return true;
+            var p = GetNodeOrNull<PlayerController>("../..") ?? GetOwnerOrNull<PlayerController>() ?? GetParentOrNull<PlayerController>();
+            if (p != null && p.IsDead) return true;
+            return false;
+        }
+    }
 
     public override void _Ready()
     {
@@ -60,6 +70,8 @@ public partial class HurtboxComponent : Area3D
 
     public void ReceiveDamage(DamageInfo damage)
     {
+        if (IsDead) return;
+
         if (_health == null)
         {
             _health = GetNodeOrNull<HealthComponent>("../../HealthComponent") ?? _player?.GetNodeOrNull<HealthComponent>("HealthComponent");

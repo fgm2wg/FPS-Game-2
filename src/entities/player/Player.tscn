@@ -61,6 +61,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 fov = 85.0
 near = 0.02
 
+[node name="AudioListener3D" type="AudioListener3D" parent="CameraPivot/Camera3D"]
+
 [node name="ViewmodelRig" type="Node3D" parent="CameraPivot/Camera3D"]
 script = ExtResource("7_vm")
 

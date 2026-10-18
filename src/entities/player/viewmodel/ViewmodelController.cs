@@ -29,6 +29,7 @@ public partial class ViewmodelController : Node3D
     private Node3D _weaponRig = null!;
     private Node3D? _mp5Model;
     private Node3D? _lmgModel;
+    private Node3D? _mglModel;
     private Node3D _muzzleMarker = null!;
     private MeshInstance3D _muzzleFlashMesh = null!;
     private OmniLight3D _muzzleFlashLight = null!;
@@ -73,6 +74,20 @@ public partial class ViewmodelController : Node3D
             _weaponRig.AddChild(_lmgModel);
         }
 
+        // 3. Heavy Special: MGL (Multiple Grenade Launcher)
+        var mglScene = ResourceLoader.Load<PackedScene>("res://assets/models/weapons/MGL.glb");
+        if (mglScene != null)
+        {
+            _mglModel = mglScene.Instantiate<Node3D>();
+            _mglModel.Name = "MGL_Model";
+            // Rotated 180 degrees around Y so the barrel points forward away from the shooter
+            _mglModel.Position = new Vector3(0.015f, -0.065f, -0.04f);
+            _mglModel.RotationDegrees = new Vector3(0.0f, 180.0f, 0.0f);
+            _mglModel.Scale = Vector3.One;
+            _mglModel.Visible = false;
+            _weaponRig.AddChild(_mglModel);
+        }
+
         _muzzleMarker = new Node3D
         {
             Name = "MuzzleMarker",
@@ -80,7 +95,7 @@ public partial class ViewmodelController : Node3D
         };
         _weaponRig.AddChild(_muzzleMarker);
 
-        if (_mp5Model == null && _lmgModel == null)
+        if (_mp5Model == null && _lmgModel == null && _mglModel == null)
         {
             BuildProceduralFallback();
         }
@@ -134,12 +149,21 @@ public partial class ViewmodelController : Node3D
         {
             if (_mp5Model != null) _mp5Model.Visible = false;
             if (_lmgModel != null) _lmgModel.Visible = true;
+            if (_mglModel != null) _mglModel.Visible = false;
             if (_muzzleMarker != null) _muzzleMarker.Position = new Vector3(0.02f, 0.04f, -0.725f);
+        }
+        else if (weaponName == "MGL")
+        {
+            if (_mp5Model != null) _mp5Model.Visible = false;
+            if (_lmgModel != null) _lmgModel.Visible = false;
+            if (_mglModel != null) _mglModel.Visible = true;
+            if (_muzzleMarker != null) _muzzleMarker.Position = new Vector3(0.02f, -0.05f, -0.58f);
         }
         else
         {
             if (_mp5Model != null) _mp5Model.Visible = true;
             if (_lmgModel != null) _lmgModel.Visible = false;
+            if (_mglModel != null) _mglModel.Visible = false;
             if (_muzzleMarker != null) _muzzleMarker.Position = new Vector3(0.0f, 0.04f, -0.36f);
         }
     }
