@@ -15,3 +15,8 @@ obj/
 *.sln.dotsettings.user
 *.suo
 *.user
+
+# Exported binaries & release archives
+export/
+*.zip
+*.exe
