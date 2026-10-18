@@ -22,6 +22,8 @@ public partial class ScorestreakManager : Node
     public static PackedScene? UavScene { get; private set; }
     public static PackedScene? CrateScene { get; private set; }
     public static PackedScene? ChuteScene { get; private set; }
+    public static PackedScene? B52Scene { get; private set; }
+    public static PackedScene? Mk84Scene { get; private set; }
 
     public static AudioStream? A10Audio { get; private set; }
     public static AudioStream? C17Audio { get; private set; }
@@ -34,6 +36,8 @@ public partial class ScorestreakManager : Node
         UavScene ??= ResourceLoader.Load<PackedScene>("res://assets/models/scorestreaks/mq1_uav.glb");
         CrateScene ??= ResourceLoader.Load<PackedScene>("res://assets/models/scorestreaks/supply_crate.glb");
         ChuteScene ??= ResourceLoader.Load<PackedScene>("res://assets/models/scorestreaks/parachute.glb");
+        B52Scene ??= ResourceLoader.Load<PackedScene>("res://assets/models/scorestreaks/b52.glb");
+        Mk84Scene ??= ResourceLoader.Load<PackedScene>("res://assets/models/scorestreaks/mk84.glb");
 
         A10Audio ??= ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/scorestreaks/a10_strafe.mp3");
         C17Audio ??= ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/scorestreaks/c17_flyby.mp3");
@@ -103,6 +107,11 @@ public partial class ScorestreakManager : Node
                 Instance = existing;
                 return existing;
             }
+
+            var mgr = new ScorestreakManager { Name = "ScorestreakManager" };
+            tree.Root.AddChild(mgr);
+            Instance = mgr;
+            return mgr;
         }
 
         return Instance!;
@@ -161,6 +170,16 @@ public partial class ScorestreakManager : Node
                 var chute = ChuteScene.Instantiate<Node3D>();
                 warmup.AddChild(chute);
             }
+            if (B52Scene != null)
+            {
+                var b52 = B52Scene.Instantiate<Node3D>();
+                warmup.AddChild(b52);
+            }
+            if (Mk84Scene != null)
+            {
+                var mk84 = Mk84Scene.Instantiate<Node3D>();
+                warmup.AddChild(mk84);
+            }
         }
         catch (Exception ex)
         {
@@ -203,8 +222,9 @@ public partial class ScorestreakManager : Node
     private void SpawnLocalUav(long callerPeerId, int teamId, Vector3 origin)
     {
         var drone = new UavDrone();
-        GetTree().Root.AddChild(drone);
         drone.Initialize(origin, callerPeerId, teamId);
+        var tree = (IsInsideTree() ? GetTree() : null) ?? Engine.GetMainLoop() as SceneTree;
+        tree?.Root?.CallDeferred(Node.MethodName.AddChild, drone);
     }
 
     public void CallCarePackage(long callerPeerId, int teamId, Vector3 dropTarget, Vector3 flightDir, StrikeTargetMarker? marker)
@@ -244,8 +264,9 @@ public partial class ScorestreakManager : Node
     private void SpawnLocalCarePackage(long crateId, long callerPeerId, int teamId, Vector3 dropTarget, Vector3 flightDir, StrikeTargetMarker? marker)
     {
         var drop = new CarePackageDrop();
-        GetTree().Root.AddChild(drop);
         drop.Initialize(crateId, dropTarget, flightDir, callerPeerId, teamId, marker);
+        var tree = (IsInsideTree() ? GetTree() : null) ?? Engine.GetMainLoop() as SceneTree;
+        tree?.Root?.CallDeferred(Node.MethodName.AddChild, drop);
     }
 
     public void CallAirstrike(long callerPeerId, int teamId, Vector3 strikeTarget, Vector3 flightDir, StrikeTargetMarker? marker)
@@ -283,8 +304,57 @@ public partial class ScorestreakManager : Node
     private void SpawnLocalAirstrike(long callerPeerId, int teamId, Vector3 strikeTarget, Vector3 flightDir, StrikeTargetMarker? marker)
     {
         var pass = new AirstrikePass();
-        GetTree().Root.AddChild(pass);
         pass.Initialize(strikeTarget, flightDir, callerPeerId, marker);
+        var tree = (IsInsideTree() ? GetTree() : null) ?? Engine.GetMainLoop() as SceneTree;
+        tree?.Root?.CallDeferred(Node.MethodName.AddChild, pass);
+    }
+
+    public void CallBombingRun(long callerPeerId, int teamId, Vector3 strikeCenter, Vector3 flightDir, BombingRunMarker? marker)
+    {
+        if (Multiplayer != null && Multiplayer.HasMultiplayerPeer())
+        {
+            if (Multiplayer.IsServer())
+            {
+                Rpc(nameof(ReplicateBombingRunRpc), callerPeerId, teamId, strikeCenter, flightDir);
+            }
+            else
+            {
+                RpcId(1, nameof(RequestBombingRunRpc), callerPeerId, teamId, strikeCenter, flightDir);
+            }
+        }
+        else
+        {
+            SpawnLocalBombingRun(callerPeerId, teamId, strikeCenter, flightDir, marker);
+        }
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void RequestBombingRunRpc(long callerPeerId, int teamId, Vector3 strikeCenter, Vector3 flightDir)
+    {
+        if (!Multiplayer.IsServer()) return;
+        Rpc(nameof(ReplicateBombingRunRpc), callerPeerId, teamId, strikeCenter, flightDir);
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void ReplicateBombingRunRpc(long callerPeerId, int teamId, Vector3 strikeCenter, Vector3 flightDir)
+    {
+        SpawnLocalBombingRun(callerPeerId, teamId, strikeCenter, flightDir, null);
+    }
+
+    private void SpawnLocalBombingRun(long callerPeerId, int teamId, Vector3 strikeCenter, Vector3 flightDir, BombingRunMarker? marker)
+    {
+        var pass = new BombingRunPass();
+        pass.Initialize(strikeCenter, flightDir, callerPeerId, marker);
+        var tree = (IsInsideTree() ? GetTree() : null) ?? Engine.GetMainLoop() as SceneTree;
+        tree?.Root?.CallDeferred(Node.MethodName.AddChild, pass);
+    }
+
+    private static string RollCrateReward()
+    {
+        float roll = GD.Randf();
+        if (roll < 0.40f) return "UAV";
+        if (roll < 0.75f) return "AIRSTRIKE";
+        return "BOMBING_RUN";
     }
 
     public void ClaimCrate(long crateId, long claimerPeerId)
@@ -295,7 +365,7 @@ public partial class ScorestreakManager : Node
             {
                 if (_claimedCrates.Contains(crateId)) return;
                 _claimedCrates.Add(crateId);
-                string reward = GD.Randf() < 0.5f ? "UAV" : "AIRSTRIKE";
+                string reward = RollCrateReward();
                 Rpc(nameof(ReplicateCrateClaimedRpc), crateId, claimerPeerId, reward);
             }
             else
@@ -305,7 +375,7 @@ public partial class ScorestreakManager : Node
         }
         else
         {
-            string reward = GD.Randf() < 0.5f ? "UAV" : "AIRSTRIKE";
+            string reward = RollCrateReward();
             ExecuteCrateClaimed(crateId, claimerPeerId, reward);
         }
     }
@@ -317,7 +387,7 @@ public partial class ScorestreakManager : Node
         if (_claimedCrates.Contains(crateId)) return;
         _claimedCrates.Add(crateId);
 
-        string reward = GD.Randf() < 0.5f ? "UAV" : "AIRSTRIKE";
+        string reward = RollCrateReward();
         Rpc(nameof(ReplicateCrateClaimedRpc), crateId, claimerPeerId, reward);
     }
 
@@ -329,8 +399,11 @@ public partial class ScorestreakManager : Node
 
     private void ExecuteCrateClaimed(long crateId, long claimerPeerId, string reward)
     {
+        var tree = (IsInsideTree() ? GetTree() : null) ?? Engine.GetMainLoop() as SceneTree;
+        if (tree == null) return;
+
         // 1. Despawn the crate across all peers
-        var crates = GetTree().GetNodesInGroup("CarePackageCrates");
+        var crates = tree.GetNodesInGroup("CarePackageCrates");
         foreach (Node node in crates)
         {
             if (node is CarePackageCrate crate && (crate.CrateNetId == crateId || crate.Name == $"CarePackageCrate_{crateId}"))
@@ -344,7 +417,7 @@ public partial class ScorestreakManager : Node
         long myPeerId = (Multiplayer != null && Multiplayer.HasMultiplayerPeer()) ? Multiplayer.GetUniqueId() : 1;
         if (claimerPeerId == myPeerId)
         {
-            var players = GetTree().GetNodesInGroup("Players");
+            var players = tree.GetNodesInGroup("Players");
             foreach (Node p in players)
             {
                 if (p is PlayerController pc && pc.IsLocalPlayer)

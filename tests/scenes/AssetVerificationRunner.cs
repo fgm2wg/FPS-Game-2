@@ -496,6 +496,8 @@ public partial class AssetVerificationRunner : Node
         // Test Power Cast easter egg barrage execution
         player.Rpc("PlayEmoteRpc", "Spell_Simple_Shoot");
         player._Process(0.25); // Advance past 0.18s trigger window
+        player.Rpc("StopEmoteRpc");
+        player._Process(0.016);
 
         // Test Grenade Throwing, Ballistics, 3.0s Fuse Countdown, and Explosion
         GD.Print("\n--- Testing M67 Grenade Throwing and Explosion Lifecycle ---");
@@ -771,9 +773,10 @@ public partial class AssetVerificationRunner : Node
         AddChild(marker);
         marker.TargetRadius = 9.0f;
         marker.TargetRadius = 2.0f;
+        marker.SetAutoRemove(5.0f, 1.0f);
         marker.FadeOutAndFree(0.5f);
         marker.QueueFree();
-        GD.Print("  [OK] StrikeTargetMarker created, dynamically resized (2m/9m), and fade-out tested.");
+        GD.Print("  [OK] StrikeTargetMarker created, dynamically resized (2m/9m), SetAutoRemove (5s), and fade-out tested.");
 
         // 2. UAV Recon Drone verification
         var uav = new UavDrone { Name = "TestUAV" };
@@ -870,24 +873,130 @@ public partial class AssetVerificationRunner : Node
         crate.QueueFree();
         GD.Print("  [OK] CarePackageDrop C-17 flyby and CarePackageCrate parachute descent verified.");
 
+        // 4b. BombingRunMarker, Mk84Bomb & BombingRunPass verification
+        var bombMarker = new BombingRunMarker { Name = "TestBombMarker" };
+        AddChild(bombMarker);
+        bombMarker.SetHeading(Vector3.Right);
+        bombMarker.SetAutoRemove(5.0f, 1.0f);
+        var leftRail = bombMarker.FindChild("LeftRail", true, false);
+        var rightRail = bombMarker.FindChild("RightRail", true, false);
+        var swathStrip = bombMarker.FindChild("SwathStrip", true, false);
+        var arrowHead = bombMarker.FindChild("ArrowHead", true, false);
+        var chevron = bombMarker.FindChild("Chevron_0", true, false);
+        if (leftRail == null || rightRail == null || swathStrip == null || arrowHead == null || chevron == null)
+        {
+            GD.PrintErr("[TEST FAILED] BombingRunMarker parallel rails, center arrow, or chevrons missing!");
+            GetTree().Quit(1);
+            return;
+        }
+        if (leftRail is MeshInstance3D mi && mi.Mesh is BoxMesh bm && bm.Size.Z < 219.0f)
+        {
+            GD.PrintErr($"[TEST FAILED] BombingRunMarker rail size invalid: {bm.Size.Z}");
+            GetTree().Quit(1);
+            return;
+        }
+        bombMarker._Process(0.016);
+        bombMarker.QueueFree();
+        GD.Print($"  [OK] BombingRunMarker 3D center arrow, {BombingRunMarker.CorridorLength}m rails, 9 chevrons, and swath verified.");
+
+        var bomb = new Mk84Bomb { Name = "TestBomb" };
+        AddChild(bomb);
+        bomb.Launch(new Vector3(0, 100, 0), new Vector3(80, 0, 0), 1);
+        var bombVisual = bomb.FindChild("ModelVisual", true, false);
+        if (bombVisual == null)
+        {
+            GD.PrintErr("[TEST FAILED] Mk84Bomb 3D ModelVisual missing!");
+            GetTree().Quit(1);
+            return;
+        }
+        bomb._PhysicsProcess(0.016);
+        bomb.QueueFree();
+        GD.Print("  [OK] Mk84Bomb 2,000 lb ordinance ballistics and model verified.");
+
+        var bombingPass = new BombingRunPass { Name = "TestBombingPass" };
+        AddChild(bombingPass);
+        bombingPass.Initialize(new Vector3(0, 0, 0), Vector3.Forward, 1, null);
+        var b52Model = bombingPass.FindChild("ModelVisual", true, false) as Node3D;
+        var b52Audio = bombingPass.FindChild("B52Audio", true, false) as AudioStreamPlayer3D;
+        if (b52Model == null || b52Audio == null)
+        {
+            GD.PrintErr("[TEST FAILED] BombingRunPass B-52 model or audio missing!");
+            GetTree().Quit(1);
+            return;
+        }
+        bombingPass._Process(0.016);
+        bombingPass.QueueFree();
+        GD.Print("  [OK] BombingRunPass B-52 Stratofortress high-altitude carpet bombing pass verified.");
+
         // 5. Scorestreak stacking, hotkey triggers, cancellation & death wipe verification
         player.AwardScorestreak("UAV");
         player.AwardScorestreak("UAV"); // Stacking x2
         player.AwardScorestreak("Care Package");
         player.AwardScorestreak("Airstrike");
+        player.AwardScorestreak("Bombing Run");
 
-        if (player.UavCount != 2 || player.CarePackageCount != 1 || player.AirstrikeCount != 1)
+        if (player.UavCount != 2 || player.CarePackageCount != 1 || player.AirstrikeCount != 1 || player.BombingRunCount != 1)
         {
-            GD.PrintErr($"[TEST FAILED] Streak counts incorrect! UAV={player.UavCount}, CarePackage={player.CarePackageCount}, Airstrike={player.AirstrikeCount}");
+            GD.PrintErr($"[TEST FAILED] Streak counts incorrect! UAV={player.UavCount}, CarePackage={player.CarePackageCount}, Airstrike={player.AirstrikeCount}, BombingRun={player.BombingRunCount}");
             GetTree().Quit(1);
             return;
         }
-        GD.Print($"  [OK] Scorestreak stack inventory verified: UAV={player.UavCount} (x2), Package={player.CarePackageCount}, Strike={player.AirstrikeCount}");
+        GD.Print($"  [OK] Scorestreak stack inventory verified: UAV={player.UavCount} (x2), Package={player.CarePackageCount}, Strike={player.AirstrikeCount}, BombingRun={player.BombingRunCount}");
 
-        // Test hotkey placement and cancellation
+        var streakVm = player.FindChild("ViewmodelRig", true, false) as Node3D;
+
+        // Test hotkey Key 7 and two-click vector placement
+        player._UnhandledInput(new InputEventKey { Keycode = Key.Key7, Pressed = true, Echo = false }); // Start Bombing Run
+        if (streakVm != null && streakVm.Visible)
+        {
+            GD.PrintErr("[TEST FAILED] Expected viewmodel to be hidden while placing streak!");
+            GetTree().Quit(1);
+            return;
+        }
+        player._UnhandledInput(new InputEventKey { Keycode = Key.Key7, Pressed = true, Echo = false }); // Cancel with Key 7
+        if (streakVm != null && !streakVm.Visible)
+        {
+            GD.PrintErr("[TEST FAILED] Expected viewmodel to be restored after cancelling streak!");
+            GetTree().Quit(1);
+            return;
+        }
+        player._UnhandledInput(new InputEventKey { Keycode = Key.Key7, Pressed = true, Echo = false }); // Start Bombing Run again
+        player._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true }); // Cancel with right click
+        player._UnhandledInput(new InputEventKey { Keycode = Key.Key7, Pressed = true, Echo = false }); // Start Bombing Run again
+        player._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true }); // Click 1: Lock center pivot
+        player._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true }); // Click 2: Confirm bombing run!
+        if (player.BombingRunCount != 0)
+        {
+            GD.PrintErr($"[TEST FAILED] Expected BombingRunCount to be 0 after confirming strike, got {player.BombingRunCount}");
+            GetTree().Quit(1);
+            return;
+        }
+        if (streakVm != null && !streakVm.Visible)
+        {
+            GD.PrintErr("[TEST FAILED] Expected viewmodel to be restored after confirming strike!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print("  [OK] Bombing Run Key 7 two-click placement, gun holstering, and execution confirmed.");
+
+        var streakWidget = new FPSGame.UI.HUD.Scorestreaks.ScorestreakWidget { Name = "TestStreakWidget" };
+        AddChild(streakWidget);
+        streakWidget.SetStreakData(8, 1, 1, 1, 1);
+        if (streakWidget.CustomMinimumSize.Y < 140)
+        {
+            GD.PrintErr($"[TEST FAILED] Expected ScorestreakWidget height >= 140, got {streakWidget.CustomMinimumSize.Y}");
+            GetTree().Quit(1);
+            return;
+        }
+        streakWidget.QueueFree();
+        GD.Print("  [OK] ScorestreakWidget 4-slot tactical HUD ladder verified.");
+
+        // Test hotkey placement and cancellation for Care Package and Airstrike
+        player.AwardScorestreak("Care Package");
         player._UnhandledInput(new InputEventKey { Keycode = Key.Key5, Pressed = true, Echo = false }); // Start Care Package
         player._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true }); // Cancel with right click
 
+        player.AwardScorestreak("Airstrike");
         player._UnhandledInput(new InputEventKey { Keycode = Key.Key6, Pressed = true, Echo = false }); // Start Airstrike
         player._UnhandledInput(new InputEventKey { Keycode = Key.Key6, Pressed = true, Echo = false }); // Cancel by pressing 6 again
 
@@ -895,9 +1004,9 @@ public partial class AssetVerificationRunner : Node
         player.GetNode<FPSGame.Common.Components.Health.HealthComponent>("HealthComponent").ApplyDamage(
             new FPSGame.Common.Components.Combat.DamageInfo(9999.0f, 0, 1, Vector3.Zero, Vector3.Up, "Test")
         );
-        if (player.UavCount != 0 || player.CarePackageCount != 0 || player.AirstrikeCount != 0)
+        if (player.UavCount != 0 || player.CarePackageCount != 0 || player.AirstrikeCount != 0 || player.BombingRunCount != 0)
         {
-            GD.PrintErr($"[TEST FAILED] Scorestreaks were not wiped on player death! UAV={player.UavCount}, Package={player.CarePackageCount}, Strike={player.AirstrikeCount}");
+            GD.PrintErr($"[TEST FAILED] Scorestreaks were not wiped on player death! UAV={player.UavCount}, Package={player.CarePackageCount}, Strike={player.AirstrikeCount}, BombingRun={player.BombingRunCount}");
             GetTree().Quit(1);
             return;
         }

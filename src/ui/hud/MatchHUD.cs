@@ -199,9 +199,9 @@ public partial class MatchHUD : Control
         Streaks.SetStreakKills(currentStreakKills);
     }
 
-    public void UpdateScorestreakProgress(int currentStreakKills, int uavCount, int carePackageCount, int airstrikeCount)
+    public void UpdateScorestreakProgress(int currentStreakKills, int uavCount, int carePackageCount, int airstrikeCount, int bombingRunCount = 0)
     {
-        Streaks.SetStreakData(currentStreakKills, uavCount, carePackageCount, airstrikeCount);
+        Streaks.SetStreakData(currentStreakKills, uavCount, carePackageCount, airstrikeCount, bombingRunCount);
     }
 
     private Control? _interactionContainer;

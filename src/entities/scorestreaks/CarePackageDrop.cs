@@ -27,6 +27,8 @@ public partial class CarePackageDrop : Node3D
     private float _elapsed;
     private bool _hasDroppedCrate;
     private bool _isComplete;
+    private bool _hasPlayedAudio;
+    private bool _initialized;
 
     private static PackedScene? _c17Scene;
     private static AudioStream? _c17Audio;
@@ -40,15 +42,37 @@ public partial class CarePackageDrop : Node3D
         _callerPeerId = callerPeerId;
         _teamId = teamId;
         _targetMarker = marker;
+        _initialized = true;
 
-        float peak = ScorestreakManager.GetMapPeakHeight(GetTree());
+        if (IsInsideTree())
+        {
+            Setup();
+        }
+    }
+
+    public override void _Ready()
+    {
+        if (_initialized)
+        {
+            Setup();
+        }
+    }
+
+    private void Setup()
+    {
+        if (_planeRoot != null) return;
+
+        var tree = (IsInsideTree() ? GetTree() : null) ?? Engine.GetMainLoop() as SceneTree;
+        float peak = ScorestreakManager.GetMapPeakHeight(tree);
         _altitude = Mathf.Max(peak + 85.0f, _dropTarget.Y + 85.0f);
+
         if (_targetMarker == null)
         {
             _targetMarker = new StrikeTargetMarker { Name = "CarePackageMarker", TargetRadius = 2.0f, TopLevel = true };
             AddChild(_targetMarker);
             _targetMarker.Position = _dropTarget;
         }
+        _targetMarker.SetAutoRemove(5.0f, 1.0f);
 
         _c17Scene ??= ScorestreakManager.C17Scene ?? ResourceLoader.Load<PackedScene>("res://assets/models/scorestreaks/c17.glb");
         _c17Audio ??= ScorestreakManager.C17Audio ?? ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/scorestreaks/c17_flyby.mp3");
@@ -78,7 +102,6 @@ public partial class CarePackageDrop : Node3D
             AttenuationFilterDb = -18.0f
         };
         _planeRoot.AddChild(_planeAudio);
-        _planeAudio.Play();
 
         UpdatePlanePosition(0.0f);
     }
@@ -95,20 +118,26 @@ public partial class CarePackageDrop : Node3D
             _altitude,
             _dropTarget.Z + _flightDir.Z * distFromTarget
         );
-        _planeRoot.GlobalPosition = pos;
+        _planeRoot.Position = pos;
 
         // Face forward along flight direction
         Vector3 forward = _flightDir;
         Vector3 up = Vector3.Up;
-        _planeRoot.GlobalBasis = Basis.LookingAt(forward, up);
+        _planeRoot.Basis = Basis.LookingAt(forward, up);
     }
 
     public override void _Process(double delta)
     {
-        if (_isComplete) return;
+        if (!_initialized || _planeRoot == null || _isComplete) return;
 
         float dt = (float)delta;
         _elapsed += dt;
+
+        if (!_hasPlayedAudio && _planeAudio != null && _planeAudio.IsInsideTree())
+        {
+            _hasPlayedAudio = true;
+            _planeAudio.Play();
+        }
 
         float dropTime = ApproachDist / Speed;
         UpdatePlanePosition(_elapsed);
@@ -147,11 +176,15 @@ public partial class CarePackageDrop : Node3D
         };
         crate.AddToGroup("CarePackageCrates");
 
-        GetTree().Root.AddChild(crate);
+        var tree = (IsInsideTree() ? GetTree() : null) ?? Engine.GetMainLoop() as SceneTree;
+        tree?.Root?.AddChild(crate);
         Vector3 releasePos = new Vector3(_dropTarget.X, _altitude - 5.0f, _dropTarget.Z);
         crate.DropFromAltitude(releasePos);
 
-        // Target marker fades out smoothly as crate deploys
-        _targetMarker?.FadeOutAndFree(2.5f);
+        // Target marker fades out smoothly as crate deploys (if still around)
+        if (IsInstanceValid(_targetMarker))
+        {
+            _targetMarker.FadeOutAndFree(1.0f);
+        }
     }
 }

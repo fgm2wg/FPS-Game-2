@@ -121,6 +121,7 @@ public partial class ExplosionManager : Node
 
     private void OnExplosionFinished(ExplosionEffect effect)
     {
+        effect.Scale = Vector3.One;
         _explosionPool?.Return(effect);
     }
 
@@ -367,6 +368,43 @@ public partial class ExplosionManager : Node
         {
             ApplyCustomBlast(worldPosition, shooterPeerId, damageRadius, maxDamage, 15.0f, "Airstrike");
         }
+    }
+
+    /// <summary>
+    /// Spawns a massive 2,000 lb MK-84 high-explosive bomb blast with heavy shockwave,
+    /// deep seismic bass acoustic punch, wide lethal radius, and distant screen shake.
+    /// </summary>
+    public void TriggerBombExplosion(Vector3 worldPosition, long shooterPeerId, float visualScale = 3.2f, float damageRadius = 24.0f, float maxDamage = 450.0f)
+    {
+        EnsurePoolInitialized();
+        PlayLocalBombExplosion(worldPosition, visualScale);
+
+        if (Multiplayer != null && Multiplayer.HasMultiplayerPeer())
+        {
+            if (Multiplayer.IsServer())
+            {
+                ApplyCustomBlast(worldPosition, shooterPeerId, damageRadius, maxDamage, 50.0f, "Bombing Run");
+                Rpc(nameof(ReplicateBombExplosionRpc), worldPosition, visualScale);
+            }
+        }
+        else
+        {
+            ApplyCustomBlast(worldPosition, shooterPeerId, damageRadius, maxDamage, 50.0f, "Bombing Run");
+        }
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void ReplicateBombExplosionRpc(Vector3 worldPosition, float visualScale)
+    {
+        PlayLocalBombExplosion(worldPosition, visualScale);
+    }
+
+    private void PlayLocalBombExplosion(Vector3 worldPosition, float visualScale)
+    {
+        EnsurePoolInitialized();
+        var effect = _explosionPool.Checkout(worldPosition);
+        effect.Scale = Vector3.One * visualScale;
+        effect.Explode(worldPosition, playAudio: true, isStrafe: false);
     }
 
     private void ApplyCustomBlast(Vector3 blastOrigin, long shooterPeerId, float blastRadius, float maxDamage, float minDamage, string weaponName)

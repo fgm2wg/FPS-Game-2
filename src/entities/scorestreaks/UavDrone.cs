@@ -28,6 +28,8 @@ public partial class UavDrone : Node3D
 
     private static PackedScene? _uavScene;
 
+    private bool _initialized;
+
     public void Initialize(Vector3 spawnCenter, long callerPeerId, int teamId)
     {
         _orbitCenter = spawnCenter;
@@ -36,9 +38,29 @@ public partial class UavDrone : Node3D
         _lifetime = 60.0f;
         _isEgressing = false;
         _orbitAngle = (float)GD.RandRange(0.0, Mathf.Tau);
+        _initialized = true;
 
-        float peak = ScorestreakManager.GetMapPeakHeight(GetTree());
-        _orbitAltitude = Mathf.Max(peak + 75.0f, spawnCenter.Y + 75.0f);
+        if (IsInsideTree())
+        {
+            Setup();
+        }
+    }
+
+    public override void _Ready()
+    {
+        if (_initialized)
+        {
+            Setup();
+        }
+    }
+
+    private void Setup()
+    {
+        if (_droneModel != null) return;
+
+        var tree = (IsInsideTree() ? GetTree() : null) ?? Engine.GetMainLoop() as SceneTree;
+        float peak = ScorestreakManager.GetMapPeakHeight(tree);
+        _orbitAltitude = Mathf.Max(peak + 75.0f, _orbitCenter.Y + 75.0f);
 
         _uavScene ??= ScorestreakManager.UavScene ?? ResourceLoader.Load<PackedScene>("res://assets/models/scorestreaks/mq1_uav.glb");
         if (_uavScene != null)
@@ -56,6 +78,8 @@ public partial class UavDrone : Node3D
 
     public override void _Process(double delta)
     {
+        if (!_initialized || _droneModel == null) return;
+
         float dt = (float)delta;
 
         if (!_isEgressing)

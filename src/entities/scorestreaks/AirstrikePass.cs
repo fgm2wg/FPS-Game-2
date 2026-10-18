@@ -48,6 +48,7 @@ public partial class AirstrikePass : Node3D
     private static PackedScene? _a10Scene;
     private static AudioStream? _a10Audio;
     private PhysicsRayQueryParameters3D? _cachedGroundQuery;
+    private bool _initialized;
 
     public void Initialize(Vector3 strikeCenter, Vector3 flightDir, long callerPeerId, StrikeTargetMarker? marker)
     {
@@ -56,18 +57,40 @@ public partial class AirstrikePass : Node3D
         if (_flightDir.LengthSquared() < 0.01f) _flightDir = Vector3.Forward;
         _callerPeerId = callerPeerId;
         _targetMarker = marker;
+        _initialized = true;
+
+        if (IsInsideTree())
+        {
+            Setup();
+        }
+    }
+
+    public override void _Ready()
+    {
+        if (_initialized)
+        {
+            Setup();
+        }
+    }
+
+    private void Setup()
+    {
+        if (_jets[0] != null) return;
+
         if (_targetMarker == null)
         {
             _targetMarker = new StrikeTargetMarker { Name = "AirstrikeMarker", TargetRadius = TargetRadius, TopLevel = true };
             AddChild(_targetMarker);
             _targetMarker.Position = _strikeCenter;
         }
+        _targetMarker.SetAutoRemove(5.0f, 1.0f);
 
         _a10Scene ??= ScorestreakManager.A10Scene ?? ResourceLoader.Load<PackedScene>("res://assets/models/scorestreaks/a10.glb");
         _a10Audio ??= ScorestreakManager.A10Audio ?? ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/scorestreaks/a10_strafe.mp3");
 
         // Maintain safe altitude as high as the C-17 cargo plane (~200m+ above sea level)
-        float peak = ScorestreakManager.GetMapPeakHeight(GetTree());
+        var tree = (IsInsideTree() ? GetTree() : null) ?? Engine.GetMainLoop() as SceneTree;
+        float peak = ScorestreakManager.GetMapPeakHeight(tree);
         _approachHeight = Mathf.Max(peak + 95.0f, _strikeCenter.Y + 125.0f);
         _egressHeight = _approachHeight;
 
@@ -191,7 +214,7 @@ public partial class AirstrikePass : Node3D
         float d = distFromTarget;
 
         Vector3 pos = ComputeJetPosition(jet.Index, d);
-        jet.Root.GlobalPosition = pos;
+        jet.Root.Position = pos;
 
         // Compute forward flight trajectory orientation with forward lookahead
         Vector3 nextPos = ComputeJetPosition(jet.Index, d + 2.0f);
@@ -215,12 +238,14 @@ public partial class AirstrikePass : Node3D
                 baseBasis = baseBasis.Rotated(fwd, bankAngle);
             }
 
-            jet.Root.GlobalBasis = baseBasis;
+            jet.Root.Basis = baseBasis;
         }
     }
 
     public override void _Process(double delta)
     {
+        if (!_initialized || _jets[0] == null) return;
+
         float dt = (float)delta;
         bool allFinished = true;
 
@@ -248,7 +273,7 @@ public partial class AirstrikePass : Node3D
             UpdateJetTransform(jet, t);
 
             // 1. Audio trigger: plays immediately as firing run begins
-            if (t >= fireStartTime && !jet.HasFiredAudio)
+            if (t >= fireStartTime && !jet.HasFiredAudio && jet.Audio != null && jet.Audio.IsInsideTree())
             {
                 jet.HasFiredAudio = true;
                 jet.Audio.Play();
@@ -272,7 +297,7 @@ public partial class AirstrikePass : Node3D
 
             // 3. Audio egress fadeout as jet climbs and veers away
             float distFromTarget = (t - targetTime) * Speed;
-            if (distFromTarget > 180.0f)
+            if (distFromTarget > 180.0f && jet.Audio != null)
             {
                 float fadeFraction = Mathf.Clamp((distFromTarget - 180.0f) / 380.0f, 0.0f, 1.0f);
                 jet.Audio.VolumeDb = Mathf.Lerp(0.0f, -42.0f, fadeFraction);
@@ -292,7 +317,10 @@ public partial class AirstrikePass : Node3D
 
         if (allFinished)
         {
-            _targetMarker?.FadeOutAndFree(1.2f);
+            if (IsInstanceValid(_targetMarker))
+            {
+                _targetMarker.FadeOutAndFree(1.0f);
+            }
             QueueFree();
         }
     }

@@ -432,10 +432,18 @@ public partial class ExplosionEffect : Node3D
                 _scorchDecal.Modulate = new Color(0.08f, 0.07f, 0.06f, _scorchAlpha);
             }
 
-            // 5. Play spatial explosion sound with random pitch variation
+            // 5. Play spatial explosion sound with pitch scaling:
+            // Heavy 2,000 lb bombs (Scale.X > 1.5) get deep bass rumble; grenades get punchy crack
             if (playAudio && _audioPlayer != null)
             {
-                _audioPlayer.PitchScale = (float)GD.RandRange(0.95, 1.05);
+                if (Scale.X > 1.5f)
+                {
+                    _audioPlayer.PitchScale = (float)GD.RandRange(0.70, 0.82);
+                }
+                else
+                {
+                    _audioPlayer.PitchScale = (float)GD.RandRange(0.95, 1.05);
+                }
                 _audioPlayer.Play();
             }
 
@@ -455,11 +463,11 @@ public partial class ExplosionEffect : Node3D
             if (node is PlayerController player && player.IsLocalPlayer && !player.IsDead)
             {
                 float dist = (player.GlobalPosition - blastOrigin).Length();
-                float maxDist = isStrafe ? 18.0f : 35.0f;
+                float maxDist = isStrafe ? 18.0f : (Scale.X > 1.5f ? 75.0f : 35.0f);
                 if (dist < maxDist)
                 {
                     float factor = 1.0f - (dist / maxDist);
-                    float trauma = isStrafe ? factor * 0.15f : factor;
+                    float trauma = isStrafe ? factor * 0.15f : (Scale.X > 1.5f ? factor * 1.35f : factor);
                     player.ApplyExplosionCameraShake(trauma);
                 }
                 break;

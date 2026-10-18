@@ -12,11 +12,22 @@ public partial class StrikeTargetMarker : Node3D
     private MeshInstance3D _discMesh = null!;
     private Node3D _arrowRoot = null!;
     private StandardMaterial3D _orangeMat = null!;
+    private StandardMaterial3D _discMat = null!;
 
     private float _animTime;
+    private float _activeLifetime = -1.0f;
     private float _fadeTimer = -1.0f;
     private float _fadeDuration = 1.0f;
     private float _targetRadius = 9.0f;
+
+    /// <summary>
+    /// Sets an automatic timer to cleanly fade out and remove the marker after the specified duration (default 5.0s).
+    /// </summary>
+    public void SetAutoRemove(float totalDuration = 5.0f, float fadeDuration = 1.0f)
+    {
+        _fadeDuration = Mathf.Max(0.1f, fadeDuration);
+        _activeLifetime = Mathf.Max(0.0f, totalDuration - _fadeDuration);
+    }
 
     public float TargetRadius
     {
@@ -56,7 +67,7 @@ public partial class StrikeTargetMarker : Node3D
         AddChild(_ringMesh);
 
         // 2. Translucent floor zone disc
-        var discMat = new StandardMaterial3D
+        _discMat = new StandardMaterial3D
         {
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
@@ -74,7 +85,7 @@ public partial class StrikeTargetMarker : Node3D
         {
             Name = "ZoneDisc",
             Mesh = cylinder,
-            MaterialOverride = discMat,
+            MaterialOverride = _discMat,
             Position = new Vector3(0.0f, 0.02f, 0.0f)
         };
         AddChild(_discMesh);
@@ -143,6 +154,16 @@ public partial class StrikeTargetMarker : Node3D
         float dt = (float)delta;
         _animTime += dt;
 
+        // Auto-remove countdown (default 5.0s if SetAutoRemove was called)
+        if (_activeLifetime > 0.0f)
+        {
+            _activeLifetime -= dt;
+            if (_activeLifetime <= 0.0f)
+            {
+                FadeOutAndFree(_fadeDuration);
+            }
+        }
+
         // Subtle vertical bobbing and rotation for dynamic tactical visualization
         if (_arrowRoot != null)
         {
@@ -161,6 +182,12 @@ public partial class StrikeTargetMarker : Node3D
                 Color c = _orangeMat.AlbedoColor;
                 c.A = alpha * 0.65f;
                 _orangeMat.AlbedoColor = c;
+            }
+            if (_discMat != null)
+            {
+                Color dc = _discMat.AlbedoColor;
+                dc.A = alpha * 0.16f;
+                _discMat.AlbedoColor = dc;
             }
             if (_fadeTimer <= 0.0f)
             {

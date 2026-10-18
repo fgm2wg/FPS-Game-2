@@ -277,7 +277,9 @@ public static class AssetIntegrationTests
             "res://assets/models/scorestreaks/c17.glb",
             "res://assets/models/scorestreaks/mq1_uav.glb",
             "res://assets/models/scorestreaks/supply_crate.glb",
-            "res://assets/models/scorestreaks/parachute.glb"
+            "res://assets/models/scorestreaks/parachute.glb",
+            "res://assets/models/scorestreaks/b52.glb",
+            "res://assets/models/scorestreaks/mk84.glb"
         };
 
         foreach (var path in streakModels)

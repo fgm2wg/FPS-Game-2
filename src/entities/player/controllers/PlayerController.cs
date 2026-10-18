@@ -166,10 +166,15 @@ public partial class PlayerController : CharacterBody3D
     public int UavCount { get; private set; }
     public int CarePackageCount { get; private set; }
     public int AirstrikeCount { get; private set; }
+    public int BombingRunCount { get; private set; }
 
-    private enum StreakPlacementType { None, Airstrike, CarePackage }
+    private enum StreakPlacementType { None, Airstrike, CarePackage, BombingRun }
     private StreakPlacementType _activePlacement = StreakPlacementType.None;
     private StrikeTargetMarker? _placementMarker;
+    private BombingRunMarker? _bombingRunMarker;
+    private bool _bombingRunCenterLocked;
+    private Vector3 _bombingRunCenterPos;
+    private Vector3 _bombingRunHeadingDir = Vector3.Forward;
     private AudioStream? _radioConfirmSound;
     private AudioStreamPlayer? _radioAudioPlayer;
 
@@ -346,6 +351,14 @@ public partial class PlayerController : CharacterBody3D
         };
         AddChild(_placementMarker);
 
+        _bombingRunMarker = new BombingRunMarker
+        {
+            Name = "LocalBombingRunMarker",
+            TopLevel = true,
+            Visible = false
+        };
+        AddChild(_bombingRunMarker);
+
         ExplosionManager.EnsureExists(GetTree());
         ScorestreakManager.EnsureExists(GetTree());
 
@@ -437,7 +450,7 @@ public partial class PlayerController : CharacterBody3D
                 _matchHud.UpdateHealth(100.0f, 100.0f);
                 _matchHud.UpdateWeapon(WeaponName, FireMode, CurrentMagAmmo, ReserveAmmo);
                 _matchHud.UpdateEquipment(FragCount, FlashCount);
-                _matchHud.UpdateScorestreakProgress(CurrentStreakKills, UavCount, CarePackageCount, AirstrikeCount);
+                _matchHud.UpdateScorestreakProgress(CurrentStreakKills, UavCount, CarePackageCount, AirstrikeCount, BombingRunCount);
             }
 
             // Bind player camera to Terrain3D if map uses Terrain3D
@@ -585,6 +598,7 @@ public partial class PlayerController : CharacterBody3D
         // Key 1: Switch to MP5
         if (@event is InputEventKey key1 && key1.Pressed && !key1.Echo && (key1.Keycode == Key.Key1 || key1.Keycode == Key.Kp1) && !IsDead)
         {
+            if (_activePlacement != StreakPlacementType.None) CancelStreakPlacement();
             EquipWeapon("MP5");
             GetViewport().SetInputAsHandled();
             return;
@@ -593,6 +607,7 @@ public partial class PlayerController : CharacterBody3D
         // Key 2: Switch to LMG
         if (@event is InputEventKey key2 && key2.Pressed && !key2.Echo && (key2.Keycode == Key.Key2 || key2.Keycode == Key.Kp2) && !IsDead)
         {
+            if (_activePlacement != StreakPlacementType.None) CancelStreakPlacement();
             EquipWeapon("LMG");
             GetViewport().SetInputAsHandled();
             return;
@@ -601,6 +616,7 @@ public partial class PlayerController : CharacterBody3D
         // Key 3: Switch to MGL (Multiple Grenade Launcher)
         if (@event is InputEventKey key3 && key3.Pressed && !key3.Echo && (key3.Keycode == Key.Key3 || key3.Keycode == Key.Kp3) && !IsDead)
         {
+            if (_activePlacement != StreakPlacementType.None) CancelStreakPlacement();
             EquipWeapon("MGL");
             GetViewport().SetInputAsHandled();
             return;
@@ -618,7 +634,7 @@ public partial class PlayerController : CharacterBody3D
             {
                 UavCount--;
                 PlayRadioConfirmSound();
-                _matchHud?.UpdateScorestreakProgress(CurrentStreakKills, UavCount, CarePackageCount, AirstrikeCount);
+                _matchHud?.UpdateScorestreakProgress(CurrentStreakKills, UavCount, CarePackageCount, AirstrikeCount, BombingRunCount);
                 ScorestreakManager.Instance?.CallUav(Multiplayer?.GetUniqueId() ?? 1, TeamId, GlobalPosition);
                 _matchHud?.ShowAnnouncement("UAV RECON INBOUND (60S)", 2.2f);
             }
@@ -635,6 +651,7 @@ public partial class PlayerController : CharacterBody3D
             }
             else if (CarePackageCount > 0)
             {
+                if (_activePlacement != StreakPlacementType.None) CancelStreakPlacement();
                 StartStreakPlacement(StreakPlacementType.CarePackage, 2.0f);
             }
             GetViewport().SetInputAsHandled();
@@ -650,7 +667,24 @@ public partial class PlayerController : CharacterBody3D
             }
             else if (AirstrikeCount > 0)
             {
+                if (_activePlacement != StreakPlacementType.None) CancelStreakPlacement();
                 StartStreakPlacement(StreakPlacementType.Airstrike, 9.0f);
+            }
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
+        // Key 7: Bombing Run Scorestreak
+        if (@event is InputEventKey key7 && key7.Pressed && !key7.Echo && (key7.Keycode == Key.Key7 || key7.Keycode == Key.Kp7) && !IsDead)
+        {
+            if (_activePlacement == StreakPlacementType.BombingRun)
+            {
+                CancelStreakPlacement();
+            }
+            else if (BombingRunCount > 0)
+            {
+                if (_activePlacement != StreakPlacementType.None) CancelStreakPlacement();
+                StartStreakPlacement(StreakPlacementType.BombingRun, 0.0f);
             }
             GetViewport().SetInputAsHandled();
             return;
@@ -667,15 +701,42 @@ public partial class PlayerController : CharacterBody3D
             }
             else if (mb.ButtonIndex == MouseButton.Left)
             {
-                ConfirmStreakPlacement();
-                GetViewport().SetInputAsHandled();
-                return;
+                if (_activePlacement == StreakPlacementType.BombingRun)
+                {
+                    if (!_bombingRunCenterLocked)
+                    {
+                        // Click 1: Lock center pivot arrow on terrain
+                        UpdatePlacementMarkerPosition();
+                        _bombingRunCenterLocked = true;
+                        if (_bombingRunMarker != null)
+                        {
+                            _bombingRunMarker.IsCenterLocked = true;
+                        }
+                        GetViewport().SetInputAsHandled();
+                        return;
+                    }
+                    else
+                    {
+                        // Click 2: Confirm bombing run along chosen flight heading
+                        UpdatePlacementMarkerPosition();
+                        ConfirmStreakPlacement();
+                        GetViewport().SetInputAsHandled();
+                        return;
+                    }
+                }
+                else
+                {
+                    ConfirmStreakPlacement();
+                    GetViewport().SetInputAsHandled();
+                    return;
+                }
             }
         }
 
         // Key V: Cycle fire mode
         if (@event is InputEventKey keyV && keyV.Pressed && !keyV.Echo && keyV.Keycode == Key.V && !IsDead)
         {
+            if (_activePlacement != StreakPlacementType.None) return;
             if (_isEmoting) Rpc(nameof(StopEmoteRpc));
             CycleFireMode();
             GetViewport().SetInputAsHandled();
@@ -685,6 +746,7 @@ public partial class PlayerController : CharacterBody3D
         // Key R: Reload
         if (@event is InputEventKey keyR && keyR.Pressed && !keyR.Echo && keyR.Keycode == Key.R && !IsDead)
         {
+            if (_activePlacement != StreakPlacementType.None) return;
             if (_isEmoting) Rpc(nameof(StopEmoteRpc));
             StartReload();
             GetViewport().SetInputAsHandled();
@@ -843,9 +905,13 @@ public partial class PlayerController : CharacterBody3D
             {
                 _characterModel.Visible = false;
             }
-            if (_viewmodel != null && !_viewmodel.Visible)
+            if (_viewmodel != null)
             {
-                _viewmodel.Visible = true;
+                bool shouldShowViewmodel = _activePlacement == StreakPlacementType.None;
+                if (_viewmodel.Visible != shouldShowViewmodel)
+                {
+                    _viewmodel.Visible = shouldShowViewmodel;
+                }
             }
         }
 
@@ -885,7 +951,8 @@ public partial class PlayerController : CharacterBody3D
         _gKeyWasPressed = gRawDown;
 
         if (IsLocalPlayer && !IsDead && (_pauseMenu == null || !_pauseMenu.IsOpen) &&
-            (MatchManager.Instance == null || !MatchManager.Instance.IsMovementLocked))
+            (MatchManager.Instance == null || !MatchManager.Instance.IsMovementLocked) &&
+            _activePlacement == StreakPlacementType.None)
         {
             if (gJustPressed && _grenadeCooldownTimer <= 0.0f)
             {
@@ -1267,7 +1334,7 @@ public partial class PlayerController : CharacterBody3D
         if (IsLocalPlayer)
         {
             CurrentStreakKills++;
-            int cycle = CurrentStreakKills % 6;
+            int cycle = CurrentStreakKills % 8;
             if (cycle == 3)
             {
                 UavCount++;
@@ -1278,13 +1345,18 @@ public partial class PlayerController : CharacterBody3D
                 CarePackageCount++;
                 _matchHud?.ShowAnnouncement("CARE PACKAGE READY [PRESS 5]", 2.2f);
             }
-            else if (cycle == 0)
+            else if (cycle == 6)
             {
                 AirstrikeCount++;
                 _matchHud?.ShowAnnouncement("AIRSTRIKE READY [PRESS 6]", 2.2f);
             }
+            else if (cycle == 0)
+            {
+                BombingRunCount++;
+                _matchHud?.ShowAnnouncement("BOMBING RUN READY [PRESS 7]", 2.2f);
+            }
 
-            _matchHud?.UpdateScorestreakProgress(CurrentStreakKills, UavCount, CarePackageCount, AirstrikeCount);
+            _matchHud?.UpdateScorestreakProgress(CurrentStreakKills, UavCount, CarePackageCount, AirstrikeCount, BombingRunCount);
         }
     }
 
@@ -1535,6 +1607,7 @@ public partial class PlayerController : CharacterBody3D
         UavCount = 0;
         CarePackageCount = 0;
         AirstrikeCount = 0;
+        BombingRunCount = 0;
         _respawnTimer = RespawnDuration;
 
         // Drive rigged character elimination animation
@@ -1547,7 +1620,7 @@ public partial class PlayerController : CharacterBody3D
 
         if (IsLocalPlayer)
         {
-            _matchHud?.UpdateScorestreakProgress(0, 0, 0, 0);
+            _matchHud?.UpdateScorestreakProgress(0, 0, 0, 0, 0);
             _matchHud?.SetRespawning(true, RespawnDuration);
 
             // Hide viewmodel so player isn't holding gun upright while dead, and reveal 3D ragdoll rig
@@ -1714,7 +1787,8 @@ public partial class PlayerController : CharacterBody3D
         UavCount = 0;
         CarePackageCount = 0;
         AirstrikeCount = 0;
-        _matchHud?.UpdateScorestreakProgress(0, 0, 0, 0);
+        BombingRunCount = 0;
+        _matchHud?.UpdateScorestreakProgress(0, 0, 0, 0, 0);
 
         // Restore upright character orientation
         if (_worldMesh != null)
@@ -2258,20 +2332,47 @@ public partial class PlayerController : CharacterBody3D
     private void StartStreakPlacement(StreakPlacementType type, float radius)
     {
         _activePlacement = type;
-        if (_placementMarker != null)
+        if (_viewmodel != null) _viewmodel.Visible = false;
+
+        if (type == StreakPlacementType.BombingRun)
         {
-            _placementMarker.TargetRadius = radius;
-            _placementMarker.Visible = true;
-            UpdatePlacementMarkerPosition();
+            _bombingRunCenterLocked = false;
+            _bombingRunHeadingDir = -_cameraPivot.GlobalBasis.Z;
+            if (_placementMarker != null) _placementMarker.Visible = false;
+            if (_bombingRunMarker != null)
+            {
+                _bombingRunMarker.IsCenterLocked = false;
+                _bombingRunMarker.Visible = true;
+                UpdatePlacementMarkerPosition();
+            }
+        }
+        else
+        {
+            if (_bombingRunMarker != null) _bombingRunMarker.Visible = false;
+            if (_placementMarker != null)
+            {
+                _placementMarker.TargetRadius = radius;
+                _placementMarker.Visible = true;
+                UpdatePlacementMarkerPosition();
+            }
         }
     }
 
     private void CancelStreakPlacement()
     {
         _activePlacement = StreakPlacementType.None;
+        _bombingRunCenterLocked = false;
+        if (!_isEmoting && _viewmodel != null)
+        {
+            _viewmodel.Visible = true;
+        }
         if (_placementMarker != null)
         {
             _placementMarker.Visible = false;
+        }
+        if (_bombingRunMarker != null)
+        {
+            _bombingRunMarker.Visible = false;
         }
     }
 
@@ -2282,38 +2383,43 @@ public partial class PlayerController : CharacterBody3D
         var spaceState = GetWorld3D()?.DirectSpaceState;
         if (spaceState == null) return;
 
+        long myId = Multiplayer != null && Multiplayer.HasMultiplayerPeer() ? Multiplayer.GetUniqueId() : 1;
+
+        if (_activePlacement == StreakPlacementType.BombingRun)
+        {
+            BombingRunCount = Mathf.Max(0, BombingRunCount - 1);
+            _matchHud?.UpdateScorestreakProgress(CurrentStreakKills, UavCount, CarePackageCount, AirstrikeCount, BombingRunCount);
+            _matchHud?.ShowAnnouncement("BOMBING RUN INBOUND", 2.2f);
+
+            ScorestreakManager.Instance?.CallBombingRun(myId, TeamId, _bombingRunCenterPos, _bombingRunHeadingDir, null);
+            PlayRadioConfirmSound();
+
+            if (_bombingRunMarker != null)
+            {
+                _bombingRunMarker.Visible = false;
+            }
+            _bombingRunCenterLocked = false;
+            _activePlacement = StreakPlacementType.None;
+            if (!_isEmoting && _viewmodel != null)
+            {
+                _viewmodel.Visible = true;
+            }
+            return;
+        }
+
         Vector3 camPos = _camera.GlobalPosition;
         Vector3 lookDir = -_camera.GlobalTransform.Basis.Z;
-        Vector3 targetPos = camPos + lookDir * 40.0f;
-
-        _rayQuery.From = camPos;
-        _rayQuery.To = camPos + lookDir * 250.0f;
-        var hit = spaceState.IntersectRay(_rayQuery);
-        if (hit.Count > 0)
-        {
-            targetPos = (Vector3)hit["position"];
-        }
-        else
-        {
-            var groundQuery = PhysicsRayQueryParameters3D.Create(targetPos + Vector3.Up * 50.0f, targetPos + Vector3.Down * 100.0f, 1 | 2);
-            var groundHit = spaceState.IntersectRay(groundQuery);
-            if (groundHit.Count > 0)
-            {
-                targetPos = (Vector3)groundHit["position"];
-            }
-        }
+        Vector3 targetPos = _placementMarker != null && _placementMarker.Visible ? _placementMarker.GlobalPosition : (camPos + lookDir * 40.0f);
 
         PlayRadioConfirmSound();
 
         Vector3 flightDir = new Vector3(lookDir.X, 0.0f, lookDir.Z).Normalized();
         if (flightDir.LengthSquared() < 0.01f) flightDir = -_cameraPivot.GlobalBasis.Z;
 
-        long myId = Multiplayer != null && Multiplayer.HasMultiplayerPeer() ? Multiplayer.GetUniqueId() : 1;
-
         if (_activePlacement == StreakPlacementType.CarePackage)
         {
             CarePackageCount = Mathf.Max(0, CarePackageCount - 1);
-            _matchHud?.UpdateScorestreakProgress(CurrentStreakKills, UavCount, CarePackageCount, AirstrikeCount);
+            _matchHud?.UpdateScorestreakProgress(CurrentStreakKills, UavCount, CarePackageCount, AirstrikeCount, BombingRunCount);
             _matchHud?.ShowAnnouncement("CARE PACKAGE INBOUND", 2.2f);
 
             ScorestreakManager.Instance?.CallCarePackage(myId, TeamId, targetPos, flightDir, null);
@@ -2321,7 +2427,7 @@ public partial class PlayerController : CharacterBody3D
         else if (_activePlacement == StreakPlacementType.Airstrike)
         {
             AirstrikeCount = Mathf.Max(0, AirstrikeCount - 1);
-            _matchHud?.UpdateScorestreakProgress(CurrentStreakKills, UavCount, CarePackageCount, AirstrikeCount);
+            _matchHud?.UpdateScorestreakProgress(CurrentStreakKills, UavCount, CarePackageCount, AirstrikeCount, BombingRunCount);
             _matchHud?.ShowAnnouncement("AIRSTRIKE INBOUND", 2.2f);
 
             ScorestreakManager.Instance?.CallAirstrike(myId, TeamId, targetPos, flightDir, null);
@@ -2332,11 +2438,15 @@ public partial class PlayerController : CharacterBody3D
             _placementMarker.Visible = false;
         }
         _activePlacement = StreakPlacementType.None;
+        if (!_isEmoting && _viewmodel != null)
+        {
+            _viewmodel.Visible = true;
+        }
     }
 
     private void UpdatePlacementMarkerPosition()
     {
-        if (_placementMarker == null || !_placementMarker.IsInsideTree() || _activePlacement == StreakPlacementType.None) return;
+        if (_activePlacement == StreakPlacementType.None) return;
 
         var spaceState = GetWorld3D()?.DirectSpaceState;
         if (spaceState == null) return;
@@ -2346,40 +2456,81 @@ public partial class PlayerController : CharacterBody3D
         Vector3 targetPos = camPos + lookDir * 40.0f;
         Vector3 normal = Vector3.Up;
 
+        const float MaxPlacementRange = 2500.0f;
         _rayQuery.From = camPos;
-        _rayQuery.To = camPos + lookDir * 250.0f;
-        var hit = spaceState.IntersectRay(_rayQuery);
-        if (hit.Count > 0)
+        _rayQuery.To = camPos + lookDir * MaxPlacementRange;
+
+        while (true)
         {
+            var hit = spaceState.IntersectRay(_rayQuery);
+            if (hit.Count == 0) break;
+
+            var collider = hit["collider"].AsGodotObject();
+            if (collider is Node node && (node.Name.ToString().Contains("Boundary", StringComparison.OrdinalIgnoreCase) || node.GetParent()?.Name.ToString().Contains("Boundar", StringComparison.OrdinalIgnoreCase) == true))
+            {
+                // Ignore invisible map edge barriers and continue raycast
+                if (hit.TryGetValue("rid", out var ridVal))
+                {
+                    _groundExcludedRids.Add(ridVal.AsRid());
+                    _rayQuery.Exclude = _groundExcludedRids;
+                }
+                continue;
+            }
+
             targetPos = (Vector3)hit["position"];
             normal = (Vector3)hit["normal"];
+            break;
         }
-        else
+
+        // Fallback for looking directly into empty sky above all mountain peaks
+        if (targetPos == camPos + lookDir * 40.0f)
         {
-            _groundPlacementQuery.From = targetPos + Vector3.Up * 50.0f;
-            _groundPlacementQuery.To = targetPos + Vector3.Down * 100.0f;
+            _groundPlacementQuery.From = camPos + lookDir * 120.0f + Vector3.Up * 120.0f;
+            _groundPlacementQuery.To = camPos + lookDir * 120.0f + Vector3.Down * 350.0f;
             var groundHit = spaceState.IntersectRay(_groundPlacementQuery);
             if (groundHit.Count > 0)
             {
                 targetPos = (Vector3)groundHit["position"];
-                normal = (Vector3)groundHit["normal"];
             }
         }
 
-        _placementMarker.GlobalPosition = targetPos;
-        if (normal.Dot(Vector3.Up) > 0.5f)
+        if (_activePlacement == StreakPlacementType.BombingRun)
         {
-            Vector3 forward = (-_cameraPivot.GlobalBasis.Z).Slide(normal).Normalized();
-            if (forward.LengthSquared() < 0.01f) forward = Vector3.Forward.Slide(normal).Normalized();
-            if (forward.LengthSquared() > 0.01f)
+            if (_bombingRunMarker == null || !_bombingRunMarker.IsInsideTree()) return;
+
+            if (!_bombingRunCenterLocked)
             {
-                _placementMarker.GlobalBasis = Basis.LookingAt(forward, normal);
+                // Stage 1: Cursor positions center pivot arrow anywhere on terrain
+                _bombingRunCenterPos = targetPos;
+                _bombingRunMarker.GlobalPosition = targetPos;
+                _bombingRunMarker.GlobalBasis = Basis.Identity;
+
+                Vector3 defaultDir = new Vector3(lookDir.X, 0.0f, lookDir.Z).Normalized();
+                if (defaultDir.LengthSquared() < 0.01f) defaultDir = -_cameraPivot.GlobalBasis.Z;
+                _bombingRunHeadingDir = defaultDir;
+                _bombingRunMarker.SetHeading(defaultDir);
             }
+            else
+            {
+                // Stage 2: Center is locked; looking around smoothly rotates corridor heading around center
+                _bombingRunMarker.GlobalPosition = _bombingRunCenterPos;
+                _bombingRunMarker.GlobalBasis = Basis.Identity;
+
+                Vector3 lookHeading = new Vector3(lookDir.X, 0.0f, lookDir.Z).Normalized();
+                if (lookHeading.LengthSquared() > 0.01f)
+                {
+                    _bombingRunHeadingDir = lookHeading;
+                }
+                _bombingRunMarker.SetHeading(_bombingRunHeadingDir);
+            }
+            return;
         }
-        else
-        {
-            _placementMarker.GlobalBasis = Basis.Identity;
-        }
+
+        if (_placementMarker == null || !_placementMarker.IsInsideTree()) return;
+
+        // Keep tactical circle indicator always completely flat on ground (never tilt to slope)
+        _placementMarker.GlobalPosition = targetPos;
+        _placementMarker.GlobalBasis = Basis.Identity;
     }
 
     public void PlayRadioConfirmSound()
@@ -2410,8 +2561,13 @@ public partial class PlayerController : CharacterBody3D
             CarePackageCount++;
             _matchHud?.ShowAnnouncement("ACQUIRED: CARE PACKAGE [PRESS 5]", 2.5f);
         }
+        else if (streakName.Equals("Bombing Run", StringComparison.OrdinalIgnoreCase) || streakName.Equals("BOMBING_RUN", StringComparison.OrdinalIgnoreCase))
+        {
+            BombingRunCount++;
+            _matchHud?.ShowAnnouncement("ACQUIRED: BOMBING RUN [PRESS 7]", 2.5f);
+        }
 
-        _matchHud?.UpdateScorestreakProgress(CurrentStreakKills, UavCount, CarePackageCount, AirstrikeCount);
+        _matchHud?.UpdateScorestreakProgress(CurrentStreakKills, UavCount, CarePackageCount, AirstrikeCount, BombingRunCount);
     }
 
     public void SetEspHighlight(bool enabled)
