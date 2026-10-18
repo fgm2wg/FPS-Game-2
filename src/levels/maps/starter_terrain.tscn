@@ -1,0 +1,187 @@
+[gd_scene format=3 uid="uid://du4mx36q0hids"]
+
+[ext_resource type="Script" path="res://src/network/spawning/NetworkSpawner.cs" id="1_spwnr"]
+[ext_resource type="PackedScene" path="res://src/entities/player/Player.tscn" id="2_plyr"]
+[ext_resource type="Script" path="res://src/gamemodes/tdm/MatchManager.cs" id="3_match"]
+[ext_resource type="Terrain3DAssets" uid="uid://dal3jhw6241qg" path="res://data/terrain/assets.tres" id="4_assets"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_terrain"]
+sky_top_color = Color(0.18, 0.32, 0.58, 1)
+sky_horizon_color = Color(0.55, 0.68, 0.78, 1)
+ground_bottom_color = Color(0.14, 0.18, 0.22, 1)
+ground_horizon_color = Color(0.55, 0.68, 0.78, 1)
+ground_curve = 0.12
+
+[sub_resource type="Sky" id="Sky_terrain"]
+sky_material = SubResource("ProceduralSkyMaterial_terrain")
+
+[sub_resource type="Environment" id="Environment_terrain"]
+background_mode = 2
+sky = SubResource("Sky_terrain")
+ambient_light_source = 3
+ambient_light_color = Color(0.6, 0.65, 0.7, 1)
+ambient_light_sky_contribution = 0.35
+tonemap_mode = 3
+glow_enabled = true
+glow_intensity = 0.4
+glow_bloom = 0.05
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_terrain"]
+
+[sub_resource type="Gradient" id="Gradient_noise"]
+offsets = PackedFloat32Array(0.2, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_terrain"]
+noise_type = 2
+frequency = 0.03
+cellular_jitter = 3.0
+cellular_return_type = 0
+domain_warp_enabled = true
+domain_warp_type = 1
+domain_warp_amplitude = 50.0
+domain_warp_fractal_type = 2
+domain_warp_fractal_lacunarity = 1.5
+domain_warp_fractal_gain = 1.0
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_terrain"]
+seamless = true
+color_ramp = SubResource("Gradient_noise")
+noise = SubResource("FastNoiseLite_terrain")
+
+[sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_starter"]
+_shader_parameters = {
+"_mouse_layer": 2147483648,
+"auto_base_texture": 0,
+"auto_height_reduction": 0.05,
+"auto_overlay_texture": 1,
+"auto_slope": 0.45,
+"bias_distance": 512.0,
+"blend_sharpness": 0.5,
+"depth_blur": 0.0,
+"dual_scale_far": 170.0,
+"dual_scale_near": 100.0,
+"dual_scale_reduction": 0.3,
+"dual_scale_texture": 0,
+"enable_macro_variation": true,
+"enable_projection": true,
+&"flat_terrain_normals": false,
+"macro_variation1": Color(0.855, 0.8625, 0.9, 1),
+"macro_variation2": Color(0.9, 0.885, 0.81, 1),
+"macro_variation_slope": 0.333,
+"mipmap_bias": 1.0,
+"noise1_angle": 0.1,
+"noise1_offset": Vector2(0.5, 0.5),
+"noise1_scale": 0.04,
+"noise2_scale": 0.076,
+"noise_texture": SubResource("NoiseTexture2D_terrain"),
+"projection_threshold": 0.87,
+"tri_scale_reduction": 0.3,
+"world_noise_fragment_normals": false,
+"world_noise_height": 34.0,
+"world_noise_lod_distance": 7500.0,
+"world_noise_max_octaves": 4,
+"world_noise_min_octaves": 2,
+"world_noise_offset": Vector3(2.17, -1.225, 1.9),
+"world_noise_region_blend": 0.33,
+"world_noise_scale": 9.85
+}
+world_background = 0
+auto_shader = true
+dual_scaling = true
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_boundary_ew"]
+size = Vector3(20, 250, 1100)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_boundary_ns"]
+size = Vector3(1100, 250, 20)
+
+[node name="StarterTerrain" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_terrain")
+camera_attributes = SubResource("CameraAttributesPractical_terrain")
+
+[node name="SunLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.866024, -0.433016, 0.250001, 0, 0.499998, 0.866026, -0.500003, 0.749999, -0.43301, 0, 150, 0)
+shadow_enabled = true
+shadow_blur = 1.5
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 300.0
+
+[node name="SpectatorCamera" type="Camera3D" parent="."]
+transform = Transform3D(0.965926, -0.0669873, 0.25, 0, 0.965926, 0.258819, -0.258819, -0.25, 0.933013, 205, 112, -1805)
+current = true
+
+[node name="Terrain3D" type="Terrain3D" parent="."]
+data_directory = "res://data/terrain"
+material = SubResource("Terrain3DMaterial_starter")
+assets = ExtResource("4_assets")
+collision_mode = 3
+collision_layer = 1
+collision_mask = 1
+collision_radius = 128
+top_level = true
+
+[node name="WorldBoundaries" type="Node3D" parent="."]
+
+[node name="Boundary_West" type="StaticBody3D" parent="WorldBoundaries"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 100, -1536)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WorldBoundaries/Boundary_West"]
+shape = SubResource("BoxShape3D_boundary_ew")
+
+[node name="Boundary_East" type="StaticBody3D" parent="WorldBoundaries"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1020, 100, -1536)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WorldBoundaries/Boundary_East"]
+shape = SubResource("BoxShape3D_boundary_ew")
+
+[node name="Boundary_North" type="StaticBody3D" parent="WorldBoundaries"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 512, 100, -2040)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WorldBoundaries/Boundary_North"]
+shape = SubResource("BoxShape3D_boundary_ns")
+
+[node name="Boundary_South" type="StaticBody3D" parent="WorldBoundaries"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 512, 100, -1030)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WorldBoundaries/Boundary_South"]
+shape = SubResource("BoxShape3D_boundary_ns")
+
+[node name="SpawnPoints" type="Node3D" parent="."]
+
+[node name="SpawnAlpha_1" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 215, 106, -1822)
+
+[node name="SpawnAlpha_2" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 218, 105.5, -1825)
+
+[node name="SpawnBravo_1" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 515, 66, -1822)
+
+[node name="SpawnBravo_2" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 512, 76.5, -1825)
+
+[node name="Players" type="Node3D" parent="."]
+
+[node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="."]
+_spawnable_scenes = PackedStringArray("res://src/entities/player/Player.tscn")
+spawn_path = NodePath("../Players")
+
+[node name="NetworkSpawner" type="Node" parent="."]
+script = ExtResource("1_spwnr")
+PlayerScene = ExtResource("2_plyr")
+PlayersContainerPath = NodePath("../Players")
+SpawnPointsContainerPath = NodePath("../SpawnPoints")
+
+[node name="MatchManager" type="Node" parent="."]
+script = ExtResource("3_match")

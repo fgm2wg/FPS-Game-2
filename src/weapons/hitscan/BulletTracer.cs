@@ -90,16 +90,19 @@ public partial class BulletTracer : Node3D
 
     private void SpawnImpactSpark(Vector3 pos)
     {
+        var tree = GetTree();
+        if (tree == null) return;
+
         var spark = new OmniLight3D
         {
             LightColor = new Color(1.0f, 0.8f, 0.3f),
             LightEnergy = 1.8f,
-            OmniRange = 1.5f,
-            GlobalPosition = pos
+            OmniRange = 1.5f
         };
-        GetTree().Root.AddChild(spark);
+        tree.Root.AddChild(spark);
+        spark.GlobalPosition = pos;
 
-        var timer = GetTree().CreateTimer(0.06);
+        var timer = tree.CreateTimer(0.06);
         timer.Timeout += () =>
         {
             if (IsInstanceValid(spark))

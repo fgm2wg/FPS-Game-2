@@ -48,12 +48,18 @@ public partial class HealthComponent : Node
         HealthChanged?.Invoke(_currentHealth, MaxHealth);
 
         // Broadcast health update to all peers
-        Rpc(nameof(SyncHealthRpc), _currentHealth);
+        if (Multiplayer != null && Multiplayer.HasMultiplayerPeer())
+        {
+            Rpc(nameof(SyncHealthRpc), _currentHealth);
+        }
 
         if (_currentHealth <= 0.0f)
         {
             Died?.Invoke(damage);
-            Rpc(nameof(NotifyDeathRpc), damage.AttackerPeerId, damage.WeaponName, damage.BoneType);
+            if (Multiplayer != null && Multiplayer.HasMultiplayerPeer())
+            {
+                Rpc(nameof(NotifyDeathRpc), damage.AttackerPeerId, damage.WeaponName, damage.BoneType);
+            }
         }
     }
 
@@ -64,7 +70,7 @@ public partial class HealthComponent : Node
     {
         _currentHealth = MaxHealth;
         HealthChanged?.Invoke(_currentHealth, MaxHealth);
-        if (Multiplayer != null && Multiplayer.IsServer())
+        if (Multiplayer != null && Multiplayer.HasMultiplayerPeer() && Multiplayer.IsServer())
         {
             Rpc(nameof(SyncHealthRpc), _currentHealth);
         }

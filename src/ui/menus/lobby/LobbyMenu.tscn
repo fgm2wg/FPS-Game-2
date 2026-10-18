@@ -141,9 +141,14 @@ text = "LEAVE LOBBY"
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="MapSelectOptionButton" type="OptionButton" parent="MarginContainer/MainLayout/FooterBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 48)
+layout_mode = 2
+
 [node name="StartMatchButton" type="Button" parent="MarginContainer/MainLayout/FooterBar"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(280, 48)
+custom_minimum_size = Vector2(240, 48)
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "START MATCH"

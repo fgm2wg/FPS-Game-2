@@ -10,6 +10,7 @@ namespace FPSGame.UI.Menus.Lobby;
 public partial class ConnectionMenu : Control
 {
     [Export] public string LobbyScenePath { get; set; } = "res://src/ui/menus/lobby/LobbyMenu.tscn";
+    [Export] public string StarterTerrainScenePath { get; set; } = "res://src/levels/maps/starter_terrain.tscn";
 
     private LineEdit _playerNameInput = null!;
     private LineEdit _serverIpInput = null!;
@@ -17,6 +18,7 @@ public partial class ConnectionMenu : Control
     private Button _hostButton = null!;
     private Button _joinButton = null!;
     private Button _soloGymButton = null!;
+    private Button _soloTerrainButton = null!;
     private Button _dedicatedButton = null!;
     private Label _statusLabel = null!;
 
@@ -28,12 +30,14 @@ public partial class ConnectionMenu : Control
         _hostButton = GetNode<Button>("%HostButton");
         _joinButton = GetNode<Button>("%JoinButton");
         _soloGymButton = GetNode<Button>("%SoloGymButton");
+        _soloTerrainButton = GetNode<Button>("%SoloTerrainButton");
         _dedicatedButton = GetNode<Button>("%DedicatedButton");
         _statusLabel = GetNode<Label>("%StatusLabel");
 
         _hostButton.Pressed += OnHostButtonPressed;
         _joinButton.Pressed += OnJoinButtonPressed;
         _soloGymButton.Pressed += OnSoloGymButtonPressed;
+        _soloTerrainButton.Pressed += OnSoloTerrainButtonPressed;
         _dedicatedButton.Pressed += OnDedicatedButtonPressed;
 
         if (NetworkManager.Instance != null)
@@ -51,6 +55,7 @@ public partial class ConnectionMenu : Control
         _hostButton.Pressed -= OnHostButtonPressed;
         _joinButton.Pressed -= OnJoinButtonPressed;
         _soloGymButton.Pressed -= OnSoloGymButtonPressed;
+        _soloTerrainButton.Pressed -= OnSoloTerrainButtonPressed;
         _dedicatedButton.Pressed -= OnDedicatedButtonPressed;
 
         if (NetworkManager.Instance != null)
@@ -70,6 +75,22 @@ public partial class ConnectionMenu : Control
         if (err == Error.Ok)
         {
             GetTree().ChangeSceneToFile("res://src/levels/world_gym/movement_gym.tscn");
+        }
+        else
+        {
+            SetButtonsEnabled(true);
+        }
+    }
+
+    private void OnSoloTerrainButtonPressed()
+    {
+        ApplyPlayerName();
+        SetButtonsEnabled(false);
+        UpdateStatus("Launching solo starter terrain...");
+        Error err = NetworkManager.Instance.HostGame(NetworkManager.DefaultPort);
+        if (err == Error.Ok)
+        {
+            GetTree().ChangeSceneToFile(StarterTerrainScenePath);
         }
         else
         {
@@ -152,6 +173,8 @@ public partial class ConnectionMenu : Control
     {
         _hostButton.Disabled = !enabled;
         _joinButton.Disabled = !enabled;
+        _soloGymButton.Disabled = !enabled;
+        _soloTerrainButton.Disabled = !enabled;
         _dedicatedButton.Disabled = !enabled;
     }
 

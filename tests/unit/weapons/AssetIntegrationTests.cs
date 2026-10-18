@@ -119,6 +119,48 @@ public static class AssetIntegrationTests
             instance2.QueueFree();
         }
 
+        // 6. Verify LMG Model
+        var lmg = ResourceLoader.Load<PackedScene>("res://assets/models/weapons/LMG.glb");
+        if (lmg == null)
+        {
+            GD.PrintErr("[AssetTest] Failed to load LMG.glb");
+            allPassed = false;
+        }
+        else
+        {
+            var instance = lmg.Instantiate<Node3D>();
+            var ap = instance.FindChild("*AnimationPlayer*", true, false) as AnimationPlayer;
+            string anims = ap != null ? string.Join(", ", ap.GetAnimationList()) : "none";
+            GD.Print($"[AssetTest] LMG direct children: {instance.GetChildCount()}, animations: {anims}");
+            // Calculate the actual transformed mesh bounds under instance
+            Aabb meshBounds = new Aabb();
+            bool hasMesh = false;
+            foreach (Node c in instance.FindChildren("*", "MeshInstance3D"))
+            {
+                if (c is MeshInstance3D mi && mi.Mesh != null)
+                {
+                    Transform3D localToInst = mi.Transform;
+                    Aabb b = localToInst * mi.Mesh.GetAabb();
+                    if (!hasMesh) { meshBounds = b; hasMesh = true; }
+                    else { meshBounds = meshBounds.Merge(b); }
+                }
+            }
+            GD.Print($"    [LMG Bounds in Model Space] Size={meshBounds.Size}, Center={meshBounds.GetCenter()}");
+            instance.QueueFree();
+        }
+
+        // 7. Verify Gunshot Audio
+        var audio = ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/weapons/gunshot.mp3");
+        if (audio == null)
+        {
+            GD.PrintErr("[AssetTest] Failed to load gunshot.mp3");
+            allPassed = false;
+        }
+        else
+        {
+            GD.Print($"[AssetTest] gunshot.mp3 loaded successfully! Length: {audio.GetLength():F2}s");
+        }
+
         return allPassed;
     }
 }

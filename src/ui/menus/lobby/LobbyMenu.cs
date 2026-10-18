@@ -12,7 +12,7 @@ namespace FPSGame.UI.Menus.Lobby;
 public partial class LobbyMenu : Control
 {
     [Export] public string ConnectionMenuScenePath { get; set; } = "res://src/ui/menus/lobby/ConnectionMenu.tscn";
-    [Export] public string DefaultMatchMapPath { get; set; } = "res://src/levels/world_gym/movement_gym.tscn";
+    [Export] public string DefaultMatchMapPath { get; set; } = "res://src/levels/maps/starter_terrain.tscn";
 
     private ItemList _alphaRosterList = null!;
     private ItemList _bravoRosterList = null!;
@@ -20,6 +20,7 @@ public partial class LobbyMenu : Control
     private Button _joinBravoButton = null!;
     private Button _startMatchButton = null!;
     private Button _leaveLobbyButton = null!;
+    private OptionButton? _mapSelectButton;
     private Label _roomStatusLabel = null!;
 
     public override void _Ready()
@@ -31,6 +32,16 @@ public partial class LobbyMenu : Control
         _startMatchButton = GetNode<Button>("%StartMatchButton");
         _leaveLobbyButton = GetNode<Button>("%LeaveLobbyButton");
         _roomStatusLabel = GetNode<Label>("%RoomStatusLabel");
+
+        if (HasNode("%MapSelectOptionButton"))
+        {
+            _mapSelectButton = GetNode<OptionButton>("%MapSelectOptionButton");
+            _mapSelectButton.Clear();
+            _mapSelectButton.AddItem("Map: Starter Terrain (Mountains & Valleys)", 0);
+            _mapSelectButton.AddItem("Map: Movement Gym (Flat Training Arena)", 1);
+            _mapSelectButton.Selected = 0;
+            _mapSelectButton.ItemSelected += OnMapSelected;
+        }
 
         _joinAlphaButton.Pressed += () => OnTeamSelectPressed(1);
         _joinBravoButton.Pressed += () => OnTeamSelectPressed(2);
@@ -62,6 +73,20 @@ public partial class LobbyMenu : Control
             NetworkManager.Instance.ServerDisconnected -= OnServerDisconnected;
             NetworkManager.Instance.MatchStarted -= OnMatchStarted;
         }
+
+        if (_mapSelectButton != null)
+        {
+            _mapSelectButton.ItemSelected -= OnMapSelected;
+        }
+    }
+
+    private void OnMapSelected(long index)
+    {
+        DefaultMatchMapPath = index switch
+        {
+            1 => "res://src/levels/world_gym/movement_gym.tscn",
+            _ => "res://src/levels/maps/starter_terrain.tscn"
+        };
     }
 
     private void OnTeamSelectPressed(int teamId)
@@ -125,6 +150,11 @@ public partial class LobbyMenu : Control
             _startMatchButton.Text = "WAITING FOR HOST TO START...";
             _startMatchButton.Disabled = true;
             _startMatchButton.Visible = true;
+        }
+
+        if (_mapSelectButton != null)
+        {
+            _mapSelectButton.Disabled = !isHost;
         }
 
         var players = NetworkManager.Instance.Players.Values.ToList();

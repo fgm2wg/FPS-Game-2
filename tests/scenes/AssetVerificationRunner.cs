@@ -193,6 +193,74 @@ public partial class AssetVerificationRunner : Node
             return;
         }
 
+        Aabb GetCamBounds(Node3D root, Camera3D cam)
+        {
+            Aabb b = new Aabb();
+            bool has = false;
+            foreach (Node c in root.FindChildren("*", "MeshInstance3D"))
+            {
+                if (c is MeshInstance3D mi && mi.Mesh != null)
+                {
+                    Aabb localAabb = mi.Mesh.GetAabb();
+                    for (int corner = 0; corner < 8; corner++)
+                    {
+                        Vector3 ptLocal = localAabb.GetEndpoint(corner);
+                        Vector3 ptWorld = mi.GlobalTransform * ptLocal;
+                        Vector3 ptCam = cam.ToLocal(ptWorld);
+                        if (!has) { b = new Aabb(ptCam, Vector3.Zero); has = true; }
+                        else { b = b.Expand(ptCam); }
+                    }
+                }
+            }
+            return b;
+        }
+
+        var playerCam = player.GetNode<Camera3D>("CameraPivot/Camera3D");
+        var mp5Bounds = GetCamBounds(vmWeapon, playerCam);
+        GD.Print($"  [MP5 in Camera Space] Min={mp5Bounds.Position}, Max={mp5Bounds.End}, Size={mp5Bounds.Size}");
+
+        player.EquipWeapon("LMG");
+        var lmgModel = viewmodel.GetNodeOrNull<Node3D>("RifleRig/LMG_Model");
+        if (lmgModel == null || !lmgModel.Visible)
+        {
+            GD.PrintErr("[TEST FAILED] LMG_Model missing or not visible when LMG equipped!");
+            GetTree().Quit(1);
+            return;
+        }
+
+        var lmgBounds = GetCamBounds(lmgModel, playerCam);
+        GD.Print($"  [OK] LMG in Camera Space: Min={lmgBounds.Position}, Max={lmgBounds.End}, Size={lmgBounds.Size}");
+        if (lmgBounds.Size.Z < 0.8f || lmgBounds.Size.X < 0.08f)
+        {
+            GD.PrintErr($"[TEST FAILED] LMG model size is too small / microscopic! Actual length: {lmgBounds.Size.Z}m");
+            GetTree().Quit(1);
+            return;
+        }
+
+        if (player.MagCapacity != 200)
+        {
+            GD.PrintErr($"[TEST FAILED] LMG MagCapacity should be 200! Actual: {player.MagCapacity}");
+            GetTree().Quit(1);
+            return;
+        }
+
+        if (Mathf.Abs(player.FireRateInterval - 0.05f) > 0.001f)
+        {
+            GD.PrintErr($"[TEST FAILED] LMG FireRateInterval should be 0.05s (1200 RPM)! Actual: {player.FireRateInterval}");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print($"  [OK] LMG Stats verified: MagCapacity={player.MagCapacity}, FireRateInterval={player.FireRateInterval:F3}s (1200 RPM)");
+
+        player.EquipWeapon("MP5");
+        if (player.MagCapacity != 30 || Mathf.Abs(player.FireRateInterval - 0.08f) > 0.001f)
+        {
+            GD.PrintErr($"[TEST FAILED] MP5 stats mismatch after switching back!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print($"  [OK] Switched back to MP5: MagCapacity={player.MagCapacity}, FireRateInterval={player.FireRateInterval:F3}s");
+
         // Test reverse walk animation update
         charModel.UpdateAnimationState(1.5f, true, false, isMovingBackward: true);
         if (Mathf.Abs(animPlayer.SpeedScale - (-1.0f)) > 0.01f)
@@ -338,7 +406,132 @@ public partial class AssetVerificationRunner : Node
         // Test Power Cast easter egg barrage execution
         player.Rpc("PlayEmoteRpc", "Spell_Simple_Shoot");
         player._Process(0.25); // Advance past 0.18s trigger window
-        GD.Print("  [OK] Power Cast bullet wave barrage easter egg executed successfully.");
+        // Verify Terrain3D integration and starter terrain heightmap
+        GD.Print("\n--- Verifying Terrain3D Plugin & Starter Terrain Data ---");
+        if (!ClassDB.ClassExists("Terrain3D"))
+        {
+            GD.PrintErr("[TEST FAILED] Terrain3D class is not registered in ClassDB!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print("  [OK] Terrain3D class registered in ClassDB.");
+
+        var terrainNode = ClassDB.Instantiate("Terrain3D").AsGodotObject() as Node3D;
+        if (terrainNode == null)
+        {
+            GD.PrintErr("[TEST FAILED] Could not instantiate Terrain3D!");
+            GetTree().Quit(1);
+            return;
+        }
+        terrainNode.Set("data_directory", "res://data/terrain");
+        var assetsRes = ResourceLoader.Load("res://data/terrain/assets.tres");
+        if (assetsRes != null)
+        {
+            terrainNode.Set("assets", assetsRes);
+        }
+        AddChild(terrainNode);
+
+        var terrainData = terrainNode.Get("data").AsGodotObject();
+        if (terrainData == null)
+        {
+            GD.PrintErr("[TEST FAILED] Terrain3D data object is null!");
+            GetTree().Quit(1);
+            return;
+        }
+
+        int regionCount = terrainData.Call("get_region_count").AsInt32();
+        var locs = terrainData.Call("get_region_locations");
+        GD.Print($"  [OK] Terrain3D regions: {regionCount}, locations: {locs}");
+
+        Vector3 pA1 = new Vector3(215.0f, 0, -1822.0f);
+        Vector3 pA2 = new Vector3(218.0f, 0, -1825.0f);
+        Vector3 pB1 = new Vector3(515.0f, 0, -1822.0f);
+        Vector3 pB2 = new Vector3(512.0f, 0, -1825.0f);
+        Vector3 pMid = new Vector3(365.0f, 0, -1822.0f);
+        float h515 = terrainData.Call("get_height", pB1).AsSingle();
+        float h512 = terrainData.Call("get_height", pB2).AsSingle();
+
+        GD.Print($"  [OK] SpawnAlpha1 ({pA1.X}, {pA1.Z}): {terrainData.Call("get_height", pA1).AsSingle():F2}m");
+        GD.Print($"  [OK] SpawnAlpha2 ({pA2.X}, {pA2.Z}): {terrainData.Call("get_height", pA2).AsSingle():F2}m");
+        GD.Print($"  [OK] SpawnBravo1 ({pB1.X}, {pB1.Z}): {h515:F2}m");
+        GD.Print($"  [OK] SpawnBravo2 ({pB2.X}, {pB2.Z}): {h512:F2}m");
+        GD.Print($"  [OK] Midpoint Valley ({pMid.X}, {pMid.Z}): {terrainData.Call("get_height", pMid).AsSingle():F2}m");
+
+        terrainNode.QueueFree();
+
+        // Verify starter_terrain.tscn scene loading and composition
+        GD.Print("\n--- Verifying Starter Terrain Scene (starter_terrain.tscn) ---");
+        var starterMapScene = ResourceLoader.Load<PackedScene>("res://src/levels/maps/starter_terrain.tscn");
+        if (starterMapScene == null)
+        {
+            GD.PrintErr("[TEST FAILED] Could not load starter_terrain.tscn!");
+            GetTree().Quit(1);
+            return;
+        }
+
+        var mapInstance = starterMapScene.Instantiate<Node3D>();
+        if (mapInstance == null)
+        {
+            GD.PrintErr("[TEST FAILED] Could not instantiate starter_terrain.tscn!");
+            GetTree().Quit(1);
+            return;
+        }
+        AddChild(mapInstance);
+
+        var sceneTerrain = mapInstance.GetNodeOrNull("Terrain3D");
+        if (sceneTerrain == null)
+        {
+            GD.PrintErr("[TEST FAILED] Terrain3D node missing in starter_terrain.tscn!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print("  [OK] Terrain3D node verified in starter_terrain.tscn.");
+
+        var spawnPoints = mapInstance.GetNodeOrNull<Node3D>("SpawnPoints");
+        if (spawnPoints == null || spawnPoints.GetChildCount() < 4)
+        {
+            GD.PrintErr("[TEST FAILED] SpawnPoints missing or has fewer than 4 spawn markers!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print($"  [OK] SpawnPoints verified with {spawnPoints.GetChildCount()} spawn markers.");
+
+        var sAlpha = spawnPoints.GetNodeOrNull<Marker3D>("SpawnAlpha_1");
+        var sBravo = spawnPoints.GetNodeOrNull<Marker3D>("SpawnBravo_1");
+        if (sAlpha == null || sBravo == null)
+        {
+            GD.PrintErr("[TEST FAILED] SpawnAlpha_1 or SpawnBravo_1 missing in starter_terrain.tscn!");
+            GetTree().Quit(1);
+            return;
+        }
+        float spawnDist = new Vector2(sBravo.Position.X - sAlpha.Position.X, sBravo.Position.Z - sAlpha.Position.Z).Length();
+        GD.Print($"  [OK] Spawn distance between Alpha and Bravo: {spawnDist:F1}m (target: 300m)");
+        if (Mathf.Abs(spawnDist - 300.0f) > 10.0f)
+        {
+            GD.PrintErr($"[TEST FAILED] Spawn distance is not ~300m! Actual: {spawnDist:F1}m");
+            GetTree().Quit(1);
+            return;
+        }
+
+        var netSpawner = mapInstance.GetNodeOrNull<FPSGame.Network.Spawning.NetworkSpawner>("NetworkSpawner");
+        if (netSpawner == null || netSpawner.PlayerScene == null)
+        {
+            GD.PrintErr("[TEST FAILED] NetworkSpawner missing or PlayerScene not set!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print("  [OK] NetworkSpawner verified with PlayerScene assigned.");
+
+        var mpSpawner = mapInstance.GetNodeOrNull<MultiplayerSpawner>("MultiplayerSpawner");
+        if (mpSpawner == null)
+        {
+            GD.PrintErr("[TEST FAILED] MultiplayerSpawner missing in starter_terrain.tscn!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print("  [OK] MultiplayerSpawner verified.");
+
+        mapInstance.QueueFree();
 
         GD.Print("\n=================== ALL ASSET INTEGRATION TESTS PASSED! ===================");
         GetTree().Quit(0);

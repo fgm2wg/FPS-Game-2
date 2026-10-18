@@ -9,12 +9,13 @@ namespace FPSGame.UI.HUD.Minimap;
 /// </summary>
 public partial class MinimapWidget : Control
 {
-    [Export] public float WorldViewSizeMeters { get; set; } = 70.0f;
+    [Export] public float WorldViewSizeMeters { get; set; } = 100.0f;
 
     private PlayerController? _localPlayer;
     private SubViewport? _viewport;
     private Camera3D? _minimapCamera;
     private Control _overlay = null!;
+    private Font? _font;
 
     public void BindLocalPlayer(PlayerController player)
     {
@@ -27,6 +28,7 @@ public partial class MinimapWidget : Control
         CustomMinimumSize = new Vector2(150, 150);
         Size = new Vector2(150, 150);
 
+        _font = ThemeDB.FallbackFont;
         _viewport = GetNodeOrNull<SubViewport>("SubViewportContainer/SubViewport");
         _minimapCamera = GetNodeOrNull<Camera3D>("SubViewportContainer/SubViewport/MinimapCamera");
         _overlay = GetNodeOrNull<Control>("RadarOverlay") ?? this;
@@ -34,6 +36,13 @@ public partial class MinimapWidget : Control
         if (_viewport != null)
         {
             _viewport.DebugDraw = SubViewport.DebugDrawEnum.Unshaded;
+        }
+
+        if (_minimapCamera != null)
+        {
+            _minimapCamera.Size = WorldViewSizeMeters;
+            _minimapCamera.Near = 1.0f;
+            _minimapCamera.Far = 1000.0f;
         }
 
         if (_overlay != this)
@@ -47,7 +56,12 @@ public partial class MinimapWidget : Control
         if (_localPlayer != null && _localPlayer.IsInsideTree() && _minimapCamera != null)
         {
             Vector3 p = _localPlayer.GlobalPosition;
-            _minimapCamera.GlobalPosition = new Vector3(p.X, 40.0f, p.Z);
+            // Place minimap camera 250m directly above the player's current height looking down
+            _minimapCamera.GlobalPosition = new Vector3(p.X, p.Y + 250.0f, p.Z);
+            if (_minimapCamera.Size != WorldViewSizeMeters)
+            {
+                _minimapCamera.Size = WorldViewSizeMeters;
+            }
         }
 
         if (Visible)
@@ -106,13 +120,15 @@ public partial class MinimapWidget : Control
         Color friendlyBlueBorder = new Color(0.9f, 0.95f, 1.0f, 0.9f);
         Color enemyRed = new Color(1.0f, 0.25f, 0.25f, 0.95f);
 
-        // 3. Draw other teammates (blue directional arrows) and enemies (red dots)
+        // 3. Draw other teammates (blue directional arrows) and enemies (red dots with distance indicator)
         var players = GetTree().GetNodesInGroup("Players");
         foreach (var node in players)
         {
             if (node is PlayerController other && other != _localPlayer && other.IsInsideTree() && !other.IsDead)
             {
                 Vector3 diff = other.GlobalPosition - myPos;
+                float distMeters = diff.Length();
+
                 // In Godot 3D: North is -Z (up on screen), East is +X (right on screen)
                 Vector2 blipPos = center + new Vector2(diff.X * pixelsPerMeter, diff.Z * pixelsPerMeter);
 
@@ -142,6 +158,31 @@ public partial class MinimapWidget : Control
                     // Enemies: red dot with white outline ring
                     target.DrawCircle(blipPos, 4.0f, enemyRed);
                     target.DrawArc(blipPos, 4.5f, 0, Mathf.Tau, 12, new Color(1.0f, 0.85f, 0.85f, 0.75f), 1.0f);
+
+                    // Distance indicator: #m or #km if >= 1000m
+                    string distText = distMeters >= 1000.0f
+                        ? $"{(distMeters * 0.001f):F1}km"
+                        : $"{Mathf.RoundToInt(distMeters)}m";
+
+                    if (_font != null)
+                    {
+                        Vector2 textPos = blipPos + new Vector2(6.0f, 3.0f);
+                        if (textPos.X > size.X - 32.0f)
+                        {
+                            textPos.X = blipPos.X - 34.0f;
+                        }
+                        if (textPos.Y > size.Y - 4.0f)
+                        {
+                            textPos.Y = blipPos.Y - 6.0f;
+                        }
+                        if (textPos.Y < 12.0f)
+                        {
+                            textPos.Y = blipPos.Y + 12.0f;
+                        }
+
+                        target.DrawString(_font, textPos + new Vector2(1, 1), distText, HorizontalAlignment.Left, -1, 9, new Color(0, 0, 0, 0.85f));
+                        target.DrawString(_font, textPos, distText, HorizontalAlignment.Left, -1, 9, new Color(1.0f, 0.88f, 0.88f, 0.95f));
+                    }
                 }
             }
         }

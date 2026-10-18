@@ -107,9 +107,21 @@ public partial class PlayerController : CharacterBody3D
     // Weapon & Combat Stats
     public string WeaponName { get; private set; } = "MP5";
     public string FireMode { get; private set; } = "AUTO"; // AUTO, SEMI, BURST
+
+    // Independent ammo pools per weapon slot
+    private int _mp5MagAmmo = 30;
+    private int _mp5ReserveAmmo = 120;
+    private int _lmgMagAmmo = 200;
+    private int _lmgReserveAmmo = 400;
+
     public int CurrentMagAmmo { get; private set; } = 30;
     public int ReserveAmmo { get; private set; } = 120;
-    public const int MagCapacity = 30;
+    public int MagCapacity => WeaponName == "LMG" ? 200 : 30;
+    public int MaxReserveAmmo => WeaponName == "LMG" ? 400 : 120;
+    public float FireRateInterval => WeaponName == "LMG" ? 0.05f : 0.08f; // LMG 1200 RPM (0.05s), MP5 750 RPM (0.08s)
+    public float ReloadDuration => WeaponName == "LMG" ? 3.0f : 1.8f;
+    public float WeaponDamage => WeaponName == "LMG" ? 32.0f : 28.0f;
+
     public int FragCount { get; private set; } = 2;
     public int FlashCount { get; private set; } = 2;
     public int CurrentStreakKills { get; private set; }
@@ -117,9 +129,14 @@ public partial class PlayerController : CharacterBody3D
     private float _fireCooldownTimer;
     private float _reloadTimer;
     private float _respawnTimer;
-    private const float FireRateInterval = 0.08f; // ~750 RPM
-    private const float ReloadDuration = 1.8f;
     private const float RespawnDuration = 3.0f;
+
+    // Zero-allocation audio voice pool (expanded to 8 players to handle 1200 RPM without voice stealing)
+    private AudioStream? _gunshotSound;
+    private readonly AudioStreamPlayer[] _audioPlayers = new AudioStreamPlayer[8];
+    private int _audioIndex;
+    private readonly AudioStreamPlayer3D[] _spatialAudioPlayers = new AudioStreamPlayer3D[6];
+    private int _spatialAudioIndex;
 
     // Pre-allocated physics raycast queries for zero heap allocations
     private PhysicsRayQueryParameters3D _rayQuery = null!;
@@ -216,8 +233,39 @@ public partial class PlayerController : CharacterBody3D
             _healthComponent.Died += OnDied;
         }
 
+        // Initialize pre-allocated gunshot audio voice pool
+        _gunshotSound = ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/weapons/gunshot.mp3");
+        for (int i = 0; i < _audioPlayers.Length; i++)
+        {
+            _audioPlayers[i] = new AudioStreamPlayer
+            {
+                Stream = _gunshotSound,
+                Bus = "Master"
+            };
+            AddChild(_audioPlayers[i]);
+        }
+        for (int i = 0; i < _spatialAudioPlayers.Length; i++)
+        {
+            _spatialAudioPlayers[i] = new AudioStreamPlayer3D
+            {
+                Stream = _gunshotSound,
+                MaxDistance = 150.0f,
+                UnitSize = 10.0f,
+                Bus = "Master"
+            };
+            AddChild(_spatialAudioPlayers[i]);
+        }
+
         if (IsLocalPlayer)
         {
+            // If the local player spawned at scene origin (0,0,0) before receiving server spawn transform,
+            // immediately reposition to the safe team spawn point to avoid falling or spawning 1.8km away.
+            if (GlobalPosition.LengthSquared() < 25.0f)
+            {
+                Vector3 safeSpawn = GetSafeSpawnPosition();
+                TeleportToSpawn(safeSpawn);
+            }
+
             _camera.Current = true;
             Input.MouseMode = Input.MouseModeEnum.Captured;
             _worldMesh.Visible = false; // Prevent clipping local camera into own body
@@ -232,6 +280,13 @@ public partial class PlayerController : CharacterBody3D
                 _matchHud.UpdateWeapon(WeaponName, FireMode, CurrentMagAmmo, ReserveAmmo);
                 _matchHud.UpdateEquipment(FragCount, FlashCount);
                 _matchHud.UpdateScorestreakProgress(CurrentStreakKills);
+            }
+
+            // Bind player camera to Terrain3D if map uses Terrain3D
+            var terrains = GetTree().CurrentScene?.FindChildren("*", "Terrain3D");
+            if (terrains != null && terrains.Count > 0)
+            {
+                terrains[0].Call("set_camera", _camera);
             }
         }
         else
@@ -365,6 +420,22 @@ public partial class PlayerController : CharacterBody3D
             return;
         }
 
+        // Key 1: Switch to MP5
+        if (@event is InputEventKey key1 && key1.Pressed && !key1.Echo && (key1.Keycode == Key.Key1 || key1.Keycode == Key.Kp1) && !IsDead)
+        {
+            EquipWeapon("MP5");
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
+        // Key 2: Switch to LMG
+        if (@event is InputEventKey key2 && key2.Pressed && !key2.Echo && (key2.Keycode == Key.Key2 || key2.Keycode == Key.Kp2) && !IsDead)
+        {
+            EquipWeapon("LMG");
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
         // Key V: Cycle fire mode
         if (@event is InputEventKey keyV && keyV.Pressed && !keyV.Echo && keyV.Keycode == Key.V && !IsDead)
         {
@@ -406,8 +477,8 @@ public partial class PlayerController : CharacterBody3D
         {
             _respawnTimer -= dt;
 
-            // Server authority triggers respawn when countdown finishes
-            if (Multiplayer.IsServer() && _respawnTimer <= 0.0f)
+            // Server authority (or offline/solo) triggers respawn when countdown finishes
+            if ((Multiplayer == null || !Multiplayer.HasMultiplayerPeer() || Multiplayer.IsServer()) && _respawnTimer <= 0.0f)
             {
                 ServerExecuteRespawn();
             }
@@ -420,6 +491,13 @@ public partial class PlayerController : CharacterBody3D
                     _worldMesh.Visible = false;
                 }
             }
+        }
+
+        // Server authoritative (or offline/solo) void protection for all player entities
+        if ((Multiplayer == null || !Multiplayer.HasMultiplayerPeer() || Multiplayer.IsServer()) && GlobalPosition.Y < -30.0f)
+        {
+            HandleVoidFall();
+            return;
         }
 
         if (!IsLocalPlayer)
@@ -685,12 +763,16 @@ public partial class PlayerController : CharacterBody3D
 
         _matchHud?.UpdateWeapon(WeaponName, FireMode, CurrentMagAmmo, ReserveAmmo);
 
-        // Procedural camera kick
-        _cameraPitch = Mathf.Clamp(_cameraPitch + 0.008f, -Mathf.DegToRad(89.0f), Mathf.DegToRad(89.0f));
+        // Procedural camera kick (tuned for high-fire-rate 1200 RPM weapons)
+        float kick = WeaponName == "LMG" ? 0.0036f : 0.008f;
+        _cameraPitch = Mathf.Clamp(_cameraPitch + kick, -Mathf.DegToRad(89.0f), Mathf.DegToRad(89.0f));
         _cameraPivot.Rotation = new Vector3(_cameraPitch, 0.0f, 0.0f);
 
         // Procedural viewmodel recoil animation & muzzle flash
         _viewmodel?.FireRecoil();
+
+        // Audio gunfire report
+        PlayLocalGunshotSound();
 
         Vector3 origin = _camera.GlobalPosition;
         Vector3 direction = -_camera.GlobalBasis.Z;
@@ -732,8 +814,8 @@ public partial class PlayerController : CharacterBody3D
         var result = spaceState.IntersectRay(_rayQuery);
         Vector3 serverHitPos = result.Count > 0 ? result["position"].AsVector3() : origin + direction * 150.0f;
 
-        // Broadcast tracer replication to other peers
-        Rpc(nameof(ReplicateFireRpc), senderId, origin, serverHitPos);
+        // Broadcast tracer replication and gunfire audio to other peers
+        Rpc(nameof(ReplicateFireRpc), senderId, origin, serverHitPos, weaponName);
 
         if (result.Count == 0) return;
 
@@ -748,6 +830,8 @@ public partial class PlayerController : CharacterBody3D
             targetPlayer = colNode.GetOwnerOrNull<PlayerController>() ?? colNode.GetParentOrNull<PlayerController>();
         }
 
+        float damageAmount = weaponName == "LMG" ? 36.0f : 28.0f;
+
         if (targetHurtbox != null)
         {
             // Reject self
@@ -759,7 +843,7 @@ public partial class PlayerController : CharacterBody3D
             Vector3 hitNormal = result["normal"].AsVector3();
 
             bool wasDeadBefore = targetHurtbox.IsDead;
-            targetHurtbox.ReceiveDamage(new DamageInfo(28.0f, senderId, targetHurtbox.BoneType, hitPos, hitNormal, weaponName));
+            targetHurtbox.ReceiveDamage(new DamageInfo(damageAmount, senderId, targetHurtbox.BoneType, hitPos, hitNormal, weaponName));
 
             bool isHeadshot = targetHurtbox.BoneType == 0;
             bool isKill = !wasDeadBefore && targetHurtbox.IsDead;
@@ -799,7 +883,7 @@ public partial class PlayerController : CharacterBody3D
                 bool wasDeadBefore = targetHealth.IsDead;
                 Vector3 hitPos = result["position"].AsVector3();
                 Vector3 hitNormal = result["normal"].AsVector3();
-                targetHealth.ApplyDamage(new DamageInfo(28.0f, senderId, 1, hitPos, hitNormal, weaponName));
+                targetHealth.ApplyDamage(new DamageInfo(damageAmount, senderId, 1, hitPos, hitNormal, weaponName));
 
                 bool isKill = !wasDeadBefore && targetHealth.IsDead;
                 if (senderId == Multiplayer.GetUniqueId())
@@ -828,12 +912,15 @@ public partial class PlayerController : CharacterBody3D
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Unreliable)]
-    private void ReplicateFireRpc(long shooterPeerId, Vector3 origin, Vector3 hitPos)
+    private void ReplicateFireRpc(long shooterPeerId, Vector3 origin, Vector3 hitPos, string weaponName = "MP5")
     {
         if (Multiplayer == null || (Multiplayer.GetRemoteSenderId() != 1 && !Multiplayer.IsServer())) return;
 
         // Don't duplicate tracer or recoil for local shooter (already executed client-side in ExecuteFire)
         if (IsLocalPlayer && shooterPeerId == Multiplayer.GetUniqueId()) return;
+
+        // Play spatial 3D gunfire audio at shooter position
+        PlaySpatialGunshotSound(origin, weaponName);
 
         // Trigger 3D world weapon recoil and muzzle flash on remote character
         _characterModel?.FireRecoil();
@@ -909,7 +996,99 @@ public partial class PlayerController : CharacterBody3D
         CurrentMagAmmo += take;
         ReserveAmmo -= take;
 
+        if (WeaponName == "MP5")
+        {
+            _mp5MagAmmo = CurrentMagAmmo;
+            _mp5ReserveAmmo = ReserveAmmo;
+        }
+        else
+        {
+            _lmgMagAmmo = CurrentMagAmmo;
+            _lmgReserveAmmo = ReserveAmmo;
+        }
+
         _matchHud?.UpdateWeapon(WeaponName, FireMode, CurrentMagAmmo, ReserveAmmo);
+    }
+
+    public void EquipWeapon(string newWeapon)
+    {
+        if (WeaponName == newWeapon) return;
+        if (IsDead) return;
+
+        // Save current ammo pool for current weapon
+        if (WeaponName == "MP5")
+        {
+            _mp5MagAmmo = CurrentMagAmmo;
+            _mp5ReserveAmmo = ReserveAmmo;
+        }
+        else if (WeaponName == "LMG")
+        {
+            _lmgMagAmmo = CurrentMagAmmo;
+            _lmgReserveAmmo = ReserveAmmo;
+        }
+
+        // Cancel active reload or emote
+        if (_isEmoting) Rpc(nameof(StopEmoteRpc));
+        _reloadTimer = 0.0f;
+        _fireCooldownTimer = 0.15f; // Quick swap transition delay
+
+        WeaponName = newWeapon;
+
+        // Restore ammo pool for newly equipped weapon
+        if (WeaponName == "MP5")
+        {
+            CurrentMagAmmo = _mp5MagAmmo;
+            ReserveAmmo = _mp5ReserveAmmo;
+        }
+        else
+        {
+            CurrentMagAmmo = _lmgMagAmmo;
+            ReserveAmmo = _lmgReserveAmmo;
+        }
+
+        _matchHud?.UpdateWeapon(WeaponName, FireMode, CurrentMagAmmo, ReserveAmmo);
+        _viewmodel?.SetEquippedWeapon(WeaponName);
+        _characterModel?.SetEquippedWeapon(WeaponName);
+
+        // Replicate weapon change across network peers
+        if (Multiplayer != null && Multiplayer.HasMultiplayerPeer())
+        {
+            Rpc(nameof(SyncEquippedWeaponRpc), WeaponName);
+        }
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void SyncEquippedWeaponRpc(string weaponName)
+    {
+        WeaponName = weaponName;
+        _characterModel?.SetEquippedWeapon(weaponName);
+    }
+
+    private void PlayLocalGunshotSound()
+    {
+        if (_gunshotSound == null || _audioPlayers.Length == 0) return;
+        var player = _audioPlayers[_audioIndex];
+        if (player == null) return;
+        _audioIndex = (_audioIndex + 1) % _audioPlayers.Length;
+
+        float basePitch = WeaponName == "LMG" ? 0.82f : 1.0f;
+        player.PitchScale = basePitch * (float)GD.RandRange(0.97, 1.03);
+        player.VolumeDb = WeaponName == "LMG" ? 1.5f : 0.0f;
+        player.Play();
+    }
+
+    private void PlaySpatialGunshotSound(Vector3 origin, string weapon)
+    {
+        if (_gunshotSound == null || _spatialAudioPlayers.Length == 0) return;
+        var player = _spatialAudioPlayers[_spatialAudioIndex];
+        if (player == null) return;
+        _spatialAudioIndex = (_spatialAudioIndex + 1) % _spatialAudioPlayers.Length;
+
+        player.GlobalPosition = origin;
+        float basePitch = weapon == "LMG" ? 0.82f : 1.0f;
+        player.PitchScale = basePitch * (float)GD.RandRange(0.96, 1.04);
+        player.VolumeDb = weapon == "LMG" ? 2.0f : 0.0f;
+        player.Play();
     }
 
     private void OnHealthChanged(float current, float max)
@@ -960,23 +1139,97 @@ public partial class PlayerController : CharacterBody3D
         }
     }
 
+    public Vector3 GetSafeSpawnPosition()
+    {
+        Vector3 spawnPos = TeamId == 2 ? new Vector3(515.0f, 66.0f, -1822.0f) : new Vector3(215.0f, 106.0f, -1822.0f);
+
+        var spawnContainer = GetTree().CurrentScene?.GetNodeOrNull<Node3D>("SpawnPoints")
+            ?? (GetTree().Root?.FindChild("SpawnPoints", true, false) as Node3D);
+
+        if (spawnContainer != null)
+        {
+            var matchingSpawns = new System.Collections.Generic.List<Marker3D>();
+            foreach (Node child in spawnContainer.GetChildren())
+            {
+                if (child is Marker3D marker)
+                {
+                    bool isBravo = marker.Name.ToString().Contains("Bravo", System.StringComparison.OrdinalIgnoreCase);
+                    if ((TeamId == 2 && isBravo) || (TeamId != 2 && !isBravo))
+                    {
+                        matchingSpawns.Add(marker);
+                    }
+                }
+            }
+
+            if (matchingSpawns.Count > 0)
+            {
+                int idx = (int)(GD.Randi() % (uint)matchingSpawns.Count);
+                spawnPos = matchingSpawns[idx].GlobalPosition;
+            }
+        }
+
+        return spawnPos;
+    }
+
+    public void TeleportToSpawn(Vector3 spawnPos)
+    {
+        GlobalPosition = spawnPos;
+        Velocity = Vector3.Zero;
+        _lastRemotePosition = spawnPos;
+        _smoothedRemoteSpeed = 0.0f;
+        _remoteMoveStopTimer = 0.0f;
+        _spawnStabilizationTimer = 0.4f;
+    }
+
+    private void HandleVoidFall()
+    {
+        Vector3 safePos = GetSafeSpawnPosition();
+        TeleportToSpawn(safePos);
+
+        if (Multiplayer == null || !Multiplayer.HasMultiplayerPeer() || Multiplayer.IsServer())
+        {
+            _healthComponent?.ApplyDamage(new DamageInfo(9999.0f, 0, 1, safePos, Vector3.Up, "Void"));
+            ServerExecuteRespawn();
+        }
+        else
+        {
+            RpcId(1, nameof(RequestVoidRespawnRpc));
+        }
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void RequestVoidRespawnRpc()
+    {
+        if (Multiplayer == null || !Multiplayer.HasMultiplayerPeer() || !Multiplayer.IsServer()) return;
+        long senderId = Multiplayer.GetRemoteSenderId();
+        if (int.TryParse(Name, out int peerId) && senderId != peerId) return;
+
+        _healthComponent?.ApplyDamage(new DamageInfo(9999.0f, 0, 1, GlobalPosition, Vector3.Up, "Void"));
+        ServerExecuteRespawn();
+    }
+
     private void ServerExecuteRespawn()
     {
-        if (!Multiplayer.IsServer()) return;
+        if (Multiplayer != null && Multiplayer.HasMultiplayerPeer() && !Multiplayer.IsServer()) return;
 
-        // Spawn flush on floor plane (y = 0.02f) so player does not fall from the air
-        Vector3 spawnPos = TeamId == 2 ? new Vector3(20, 0.02f, 0) : new Vector3(-20, 0.02f, 0);
-
-        GlobalPosition = spawnPos;
+        Vector3 spawnPos = GetSafeSpawnPosition();
+        TeleportToSpawn(spawnPos);
         _healthComponent?.ResetHealth();
 
-        Rpc(nameof(ClientRespawnRpc), spawnPos);
+        if (Multiplayer != null && Multiplayer.HasMultiplayerPeer())
+        {
+            Rpc(nameof(ClientRespawnRpc), spawnPos);
+        }
+        else
+        {
+            ClientRespawnRpc(spawnPos);
+        }
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void ClientRespawnRpc(Vector3 spawnPos)
     {
-        if (Multiplayer != null && Multiplayer.GetRemoteSenderId() != 1 && !Multiplayer.IsServer()) return;
+        if (Multiplayer != null && Multiplayer.HasMultiplayerPeer() && Multiplayer.GetRemoteSenderId() != 1 && !Multiplayer.IsServer()) return;
 
         _isDead = false;
         IsCrouched = false;
@@ -986,21 +1239,18 @@ public partial class PlayerController : CharacterBody3D
         _currentCameraHeight = 1.6f;
         UpdateStanceColliders(false);
 
-        GlobalPosition = spawnPos;
-        Velocity = Vector3.Zero;
-
-        // Reset remote position tracker and smoothing to spawnPos to eliminate false displacement spike
-        _lastRemotePosition = spawnPos;
-        _smoothedRemoteSpeed = 0.0f;
-        _remoteMoveStopTimer = 0.0f;
-        _remoteMovingBackward = false;
-        _spawnStabilizationTimer = 0.4f;
+        TeleportToSpawn(spawnPos);
 
         // Restore health component immediately on all peers so IsDead flips to false instantly
         _healthComponent?.ResetHealth();
 
+        // Reset weapon ammo pools for all weapons
+        _mp5MagAmmo = 30;
+        _mp5ReserveAmmo = 120;
+        _lmgMagAmmo = 200;
+        _lmgReserveAmmo = 400;
         CurrentMagAmmo = MagCapacity;
-        ReserveAmmo = 120;
+        ReserveAmmo = MaxReserveAmmo;
         _reloadTimer = 0.0f;
         _fireCooldownTimer = 0.0f;
         _respawnTimer = 0.0f;
@@ -1017,6 +1267,7 @@ public partial class PlayerController : CharacterBody3D
             if (_worldMesh != null) _worldMesh.Visible = true;
             _characterModel.Visible = true;
             _characterModel.ResetCharacter();
+            _characterModel.SetEquippedWeapon(WeaponName);
             _characterModel.UpdateAnimationState(0.0f, true, false, false);
         }
 
@@ -1028,7 +1279,11 @@ public partial class PlayerController : CharacterBody3D
             _camera.Position = Vector3.Zero;
             _camera.Rotation = Vector3.Zero;
 
-            if (_viewmodel != null) _viewmodel.Visible = true;
+            if (_viewmodel != null)
+            {
+                _viewmodel.Visible = true;
+                _viewmodel.SetEquippedWeapon(WeaponName);
+            }
             if (_worldMesh != null) _worldMesh.Visible = false;
             if (_characterModel != null)
             {
@@ -1047,6 +1302,13 @@ public partial class PlayerController : CharacterBody3D
         float dt = (float)delta;
 
         if (!IsLocalPlayer) return;
+
+        // Void threshold protection: catch player falling through map and immediately teleport/kill
+        if (GlobalPosition.Y < -30.0f)
+        {
+            HandleVoidFall();
+            return;
+        }
 
         bool isMovementFrozen = IsDead ||
                                 (_pauseMenu != null && _pauseMenu.IsOpen) ||

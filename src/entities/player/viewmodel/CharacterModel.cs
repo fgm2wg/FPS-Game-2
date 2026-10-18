@@ -17,6 +17,9 @@ public partial class CharacterModel : Node3D
     private BoneAttachment3D? _handAttachment;
 
     private Node3D? _weaponModel;
+    private Node3D? _mp5WorldModel;
+    private Node3D? _lmgWorldModel;
+    private string _currentEquippedWeapon = "MP5";
     private Node3D? _muzzleMarker;
     private MeshInstance3D? _muzzleFlashMesh;
     private OmniLight3D? _muzzleFlashLight;
@@ -28,6 +31,7 @@ public partial class CharacterModel : Node3D
     private float _aimPitch;
 
     private string _currentAnim = "";
+    private string _activeEmote = "";
     private bool _isDead;
     private int _teamId = 1;
 
@@ -134,48 +138,90 @@ public partial class CharacterModel : Node3D
     private void MountWeaponToHand(BoneAttachment3D parent)
     {
         var rifleScene = ResourceLoader.Load<PackedScene>("res://assets/models/weapons/MGP7_Rigged.glb");
-        if (rifleScene == null) return;
-
-        _weaponModel = rifleScene.Instantiate<Node3D>();
-        _weaponModel.Name = "MGP7_Rifle";
-
-        // Align MP5 grip directly into humanoid hand palm with barrel pointing straight forward down -Z
-        _weaponModel.Position = WeaponRestPosition;
-        _weaponModel.RotationDegrees = WeaponRestRotation;
-        _weaponModel.Scale = new Vector3(1.0f, 1.0f, 1.0f);
-        parent.AddChild(_weaponModel);
-
-        // Muzzle marker and dynamic flash light at weapon barrel tip (-X in MP5 model space)
-        _muzzleMarker = new Node3D
+        if (rifleScene != null)
         {
-            Name = "MuzzleMarker",
-            Position = new Vector3(-0.41f, 0.08f, 0.0f)
-        };
-        _weaponModel.AddChild(_muzzleMarker);
+            _mp5WorldModel = rifleScene.Instantiate<Node3D>();
+            _mp5WorldModel.Name = "MGP7_Rifle";
+            _mp5WorldModel.Position = WeaponRestPosition;
+            _mp5WorldModel.RotationDegrees = WeaponRestRotation;
+            _mp5WorldModel.Scale = new Vector3(1.0f, 1.0f, 1.0f);
+            parent.AddChild(_mp5WorldModel);
+            _weaponModel = _mp5WorldModel;
 
-        var flashMat = new StandardMaterial3D
-        {
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            AlbedoColor = new Color(1.0f, 0.9f, 0.45f, 0.95f),
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha
-        };
+            // Muzzle marker and dynamic flash light at weapon barrel tip (-X in MP5 model space)
+            _muzzleMarker = new Node3D
+            {
+                Name = "MuzzleMarker",
+                Position = new Vector3(-0.41f, 0.08f, 0.0f)
+            };
+            _mp5WorldModel.AddChild(_muzzleMarker);
 
-        _muzzleFlashMesh = new MeshInstance3D
-        {
-            Mesh = new BoxMesh { Size = new Vector3(0.12f, 0.12f, 0.12f) },
-            MaterialOverride = flashMat,
-            Visible = false
-        };
-        _muzzleMarker.AddChild(_muzzleFlashMesh);
+            var flashMat = new StandardMaterial3D
+            {
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+                AlbedoColor = new Color(1.0f, 0.9f, 0.45f, 0.95f),
+                Transparency = BaseMaterial3D.TransparencyEnum.Alpha
+            };
 
-        _muzzleFlashLight = new OmniLight3D
+            _muzzleFlashMesh = new MeshInstance3D
+            {
+                Mesh = new BoxMesh { Size = new Vector3(0.12f, 0.12f, 0.12f) },
+                MaterialOverride = flashMat,
+                Visible = false
+            };
+            _muzzleMarker.AddChild(_muzzleFlashMesh);
+
+            _muzzleFlashLight = new OmniLight3D
+            {
+                LightColor = new Color(1.0f, 0.85f, 0.45f),
+                LightEnergy = 2.5f,
+                OmniRange = 4.0f,
+                Visible = false
+            };
+            _muzzleMarker.AddChild(_muzzleFlashLight);
+        }
+
+        var lmgScene = ResourceLoader.Load<PackedScene>("res://assets/models/weapons/LMG.glb");
+        if (lmgScene != null)
         {
-            LightColor = new Color(1.0f, 0.85f, 0.45f),
-            LightEnergy = 2.5f,
-            OmniRange = 4.0f,
-            Visible = false
-        };
-        _muzzleMarker.AddChild(_muzzleFlashLight);
+            _lmgWorldModel = lmgScene.Instantiate<Node3D>();
+            _lmgWorldModel.Name = "LMG_Rifle";
+            _lmgWorldModel.Position = new Vector3(0.015f, 0.045f, -0.02f);
+            _lmgWorldModel.RotationDegrees = new Vector3(-1.24f, 177.32f, -79.32f);
+            _lmgWorldModel.Scale = Vector3.One;
+            _lmgWorldModel.Visible = false;
+            parent.AddChild(_lmgWorldModel);
+        }
+    }
+
+    public void SetEquippedWeapon(string weaponName)
+    {
+        _currentEquippedWeapon = weaponName;
+        _weaponModel = weaponName == "LMG" ? _lmgWorldModel : _mp5WorldModel;
+        bool shouldBeVisible = !_isDead && string.IsNullOrEmpty(_activeEmote);
+        UpdateWeaponVisibility(shouldBeVisible);
+    }
+
+    public void UpdateWeaponVisibility(bool visible)
+    {
+        if (!visible)
+        {
+            if (_mp5WorldModel != null) _mp5WorldModel.Visible = false;
+            if (_lmgWorldModel != null) _lmgWorldModel.Visible = false;
+        }
+        else
+        {
+            if (_currentEquippedWeapon == "LMG")
+            {
+                if (_lmgWorldModel != null) _lmgWorldModel.Visible = true;
+                if (_mp5WorldModel != null) _mp5WorldModel.Visible = false;
+            }
+            else
+            {
+                if (_mp5WorldModel != null) _mp5WorldModel.Visible = true;
+                if (_lmgWorldModel != null) _lmgWorldModel.Visible = false;
+            }
+        }
     }
 
     public void SetTeam(int teamId)
@@ -208,16 +254,14 @@ public partial class CharacterModel : Node3D
 
     public void UpdateAnimationState(float horizontalSpeed, bool isOnFloor, bool isDead, bool isMovingBackward = false, bool isCrouched = false, string activeEmote = "")
     {
+        _activeEmote = activeEmote;
         if (isDead)
         {
             if (!_isDead)
             {
                 _isDead = true;
                 PlayAnimation("Death01", 0.15f);
-                if (_weaponModel != null)
-                {
-                    _weaponModel.Visible = false;
-                }
+                UpdateWeaponVisibility(false);
             }
             return;
         }
@@ -227,10 +271,7 @@ public partial class CharacterModel : Node3D
         // If an emote is active, hide weapon and play the emote animation
         if (!string.IsNullOrEmpty(activeEmote))
         {
-            if (_weaponModel != null && _weaponModel.Visible)
-            {
-                _weaponModel.Visible = false;
-            }
+            UpdateWeaponVisibility(false);
 
             if (_currentAnim != activeEmote)
             {
@@ -240,10 +281,7 @@ public partial class CharacterModel : Node3D
         }
 
         // Ensure weapon model is visible when not emoting or dead
-        if (_weaponModel != null && !_weaponModel.Visible)
-        {
-            _weaponModel.Visible = true;
-        }
+        UpdateWeaponVisibility(true);
 
         string targetAnim;
         float speedScale = 1.0f;
@@ -377,11 +415,17 @@ public partial class CharacterModel : Node3D
     public void ResetCharacter()
     {
         _isDead = false;
-        if (_weaponModel != null)
+        _activeEmote = "";
+        UpdateWeaponVisibility(true);
+        if (_mp5WorldModel != null)
         {
-            _weaponModel.Visible = true;
-            _weaponModel.Position = WeaponRestPosition;
-            _weaponModel.RotationDegrees = WeaponRestRotation;
+            _mp5WorldModel.Position = WeaponRestPosition;
+            _mp5WorldModel.RotationDegrees = WeaponRestRotation;
+        }
+        if (_lmgWorldModel != null)
+        {
+            _lmgWorldModel.Position = new Vector3(0.015f, 0.045f, -0.02f);
+            _lmgWorldModel.RotationDegrees = new Vector3(-1.24f, 177.32f, -79.32f);
         }
         PlayAnimation("Pistol_Idle", 0.1f);
     }

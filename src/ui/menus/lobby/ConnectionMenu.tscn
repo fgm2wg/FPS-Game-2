@@ -132,11 +132,17 @@ custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 text = "HOST SERVER"
 
-[node name="SoloGymButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/ButtonsContainer"]
+[node name="SoloTerrainButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/ButtonsContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
-text = "SOLO TEST GYM"
+text = "SOLO STARTER TERRAIN (MOUNTAINS)"
+
+[node name="SoloGymButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/ButtonsContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+text = "SOLO MOVEMENT GYM (BOX ARENA)"
 
 [node name="DedicatedButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/ButtonsContainer"]
 unique_name_in_owner = true

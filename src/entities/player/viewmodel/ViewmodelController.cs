@@ -27,6 +27,8 @@ public partial class ViewmodelController : Node3D
 
     // Rig nodes
     private Node3D _weaponRig = null!;
+    private Node3D? _mp5Model;
+    private Node3D? _lmgModel;
     private Node3D _muzzleMarker = null!;
     private MeshInstance3D _muzzleFlashMesh = null!;
     private OmniLight3D _muzzleFlashLight = null!;
@@ -46,23 +48,39 @@ public partial class ViewmodelController : Node3D
         _weaponRig = new Node3D { Name = "RifleRig" };
         AddChild(_weaponRig);
 
+        // 1. Primary SMG: MP5
         var rifleScene = ResourceLoader.Load<PackedScene>("res://assets/models/weapons/MGP7_Rigged.glb");
         if (rifleScene != null)
         {
-            var weaponInstance = rifleScene.Instantiate<Node3D>();
-            weaponInstance.Name = "MGP7_Model";
-            weaponInstance.Position = new Vector3(0.0f, -0.04f, 0.08f);
-            weaponInstance.RotationDegrees = new Vector3(0.0f, -90.0f, 0.0f);
-            _weaponRig.AddChild(weaponInstance);
-
-            _muzzleMarker = new Node3D
-            {
-                Name = "MuzzleMarker",
-                Position = new Vector3(0.0f, 0.04f, -0.36f)
-            };
-            _weaponRig.AddChild(_muzzleMarker);
+            _mp5Model = rifleScene.Instantiate<Node3D>();
+            _mp5Model.Name = "MGP7_Model";
+            _mp5Model.Position = new Vector3(0.0f, -0.04f, 0.08f);
+            _mp5Model.RotationDegrees = new Vector3(0.0f, -90.0f, 0.0f);
+            _weaponRig.AddChild(_mp5Model);
         }
-        else
+
+        // 2. Heavy Primary / Secondary: LMG (M249 SAW / Minimi)
+        var lmgScene = ResourceLoader.Load<PackedScene>("res://assets/models/weapons/LMG.glb");
+        if (lmgScene != null)
+        {
+            _lmgModel = lmgScene.Instantiate<Node3D>();
+            _lmgModel.Name = "LMG_Model";
+            // Positioned lower-right of the viewport brought back closer to camera to accommodate long stock
+            _lmgModel.Position = new Vector3(0.02f, -0.075f, -0.045f);
+            _lmgModel.RotationDegrees = new Vector3(0.0f, 180.0f, 0.0f);
+            _lmgModel.Scale = Vector3.One;
+            _lmgModel.Visible = false;
+            _weaponRig.AddChild(_lmgModel);
+        }
+
+        _muzzleMarker = new Node3D
+        {
+            Name = "MuzzleMarker",
+            Position = new Vector3(0.0f, 0.04f, -0.36f)
+        };
+        _weaponRig.AddChild(_muzzleMarker);
+
+        if (_mp5Model == null && _lmgModel == null)
         {
             BuildProceduralFallback();
         }
@@ -110,18 +128,38 @@ public partial class ViewmodelController : Node3D
         _weaponRig.AddChild(_muzzleMarker);
     }
 
+    public void SetEquippedWeapon(string weaponName)
+    {
+        if (weaponName == "LMG")
+        {
+            if (_mp5Model != null) _mp5Model.Visible = false;
+            if (_lmgModel != null) _lmgModel.Visible = true;
+            if (_muzzleMarker != null) _muzzleMarker.Position = new Vector3(0.02f, 0.04f, -0.725f);
+        }
+        else
+        {
+            if (_mp5Model != null) _mp5Model.Visible = true;
+            if (_lmgModel != null) _lmgModel.Visible = false;
+            if (_muzzleMarker != null) _muzzleMarker.Position = new Vector3(0.0f, 0.04f, -0.36f);
+        }
+    }
+
     public void FireRecoil()
     {
-        // Punch weapon backward and up
-        _recoilPosition += new Vector3(0.004f, 0.012f, 0.048f);
-        _recoilRotation += new Vector3(
-            0.085f,
-            (float)GD.RandRange(-0.012, 0.012),
-            (float)GD.RandRange(-0.016, 0.016)
+        // Punch weapon backward and up with clamping to prevent runaway recoil during 1200 RPM rapid fire
+        _recoilPosition = new Vector3(
+            Mathf.Clamp(_recoilPosition.X + (float)GD.RandRange(-0.002, 0.002), -0.015f, 0.015f),
+            Mathf.Clamp(_recoilPosition.Y + 0.008f, -0.02f, 0.035f),
+            Mathf.Clamp(_recoilPosition.Z + 0.032f, -0.01f, 0.065f)
+        );
+        _recoilRotation = new Vector3(
+            Mathf.Clamp(_recoilRotation.X + 0.055f, -0.05f, 0.14f),
+            Mathf.Clamp(_recoilRotation.Y + (float)GD.RandRange(-0.010, 0.010), -0.05f, 0.05f),
+            Mathf.Clamp(_recoilRotation.Z + (float)GD.RandRange(-0.012, 0.012), -0.05f, 0.05f)
         );
 
         // Muzzle flash
-        _muzzleFlashTimer = 0.045f;
+        _muzzleFlashTimer = 0.035f;
         _muzzleFlashMesh.Visible = true;
         _muzzleFlashLight.Visible = true;
     }

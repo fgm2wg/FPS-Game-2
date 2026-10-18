@@ -1,0 +1,28 @@
+[gd_resource type="Terrain3DAssets" load_steps=7 format=3 uid="uid://dal3jhw6241qg"]
+
+[ext_resource type="Texture2D" uid="uid://c88j3oj0lf6om" path="res://assets/textures/terrain/rock023_alb_ht.png" id="2_pog6b"]
+[ext_resource type="Texture2D" uid="uid://ddprscrpsofah" path="res://assets/textures/terrain/ground037_alb_ht.png" id="3_g8f2m"]
+[ext_resource type="Texture2D" uid="uid://c307hdmos4gtm" path="res://assets/textures/terrain/rock023_nrm_rgh.png" id="3_wncaf"]
+[ext_resource type="Texture2D" uid="uid://c1ots7w6i0i1q" path="res://assets/textures/terrain/ground037_nrm_rgh.png" id="4_aw5y1"]
+
+[sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_lha57"]
+name = "Cliff"
+albedo_texture = ExtResource("2_pog6b")
+normal_texture = ExtResource("3_wncaf")
+normal_depth = 1.0
+ao_strength = 2.0
+roughness = -0.05
+
+[sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_od0q7"]
+name = "Grass"
+id = 1
+albedo_color = Color(0.67451, 0.74902, 0.686275, 1)
+albedo_texture = ExtResource("3_g8f2m")
+normal_texture = ExtResource("4_aw5y1")
+normal_depth = 1.0
+ao_strength = 2.0
+uv_scale = 0.2
+detiling_rotation = 0.161
+
+[resource]
+texture_list = Array[Terrain3DTextureAsset]([SubResource("Terrain3DTextureAsset_lha57"), SubResource("Terrain3DTextureAsset_od0q7")])
