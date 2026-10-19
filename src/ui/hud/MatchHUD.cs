@@ -182,7 +182,13 @@ public partial class MatchHUD : Control
 
     public void UpdateWeapon(string name, string fireMode, int currentMag, int reserveAmmo)
     {
-        _weaponNameLabel.Text = name;
+        string displayName = name switch
+        {
+            "LMG" => "FN MINIMI",
+            "MGL" => "M32 MGL",
+            _ => name
+        };
+        _weaponNameLabel.Text = displayName;
         _fireModeLabel.Text = $"[V] {fireMode.ToUpperInvariant()}";
         _ammoMagLabel.Text = currentMag.ToString();
         _ammoReserveLabel.Text = reserveAmmo.ToString();

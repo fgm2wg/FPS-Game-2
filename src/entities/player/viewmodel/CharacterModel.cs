@@ -20,6 +20,7 @@ public partial class CharacterModel : Node3D
     private Node3D? _mp5WorldModel;
     private Node3D? _lmgWorldModel;
     private Node3D? _mglWorldModel;
+    private Node3D? _m82WorldModel;
     private string _currentEquippedWeapon = "MP5";
     private Node3D? _muzzleMarker;
     private MeshInstance3D? _muzzleFlashMesh;
@@ -205,6 +206,18 @@ public partial class CharacterModel : Node3D
             _mglWorldModel.Visible = false;
             parent.AddChild(_mglWorldModel);
         }
+
+        var m82Scene = ResourceLoader.Load<PackedScene>("res://assets/models/weapons/M82.glb");
+        if (m82Scene != null)
+        {
+            _m82WorldModel = m82Scene.Instantiate<Node3D>();
+            _m82WorldModel.Name = "M82_Rifle";
+            _m82WorldModel.Position = new Vector3(0.015f, 0.045f, -0.02f);
+            _m82WorldModel.RotationDegrees = new Vector3(1.24f, 87.32f, 79.32f);
+            _m82WorldModel.Scale = new Vector3(0.007f, 0.007f, 0.007f);
+            _m82WorldModel.Visible = false;
+            parent.AddChild(_m82WorldModel);
+        }
     }
 
     public void SetEquippedWeapon(string weaponName)
@@ -214,6 +227,7 @@ public partial class CharacterModel : Node3D
         {
             "LMG" => _lmgWorldModel,
             "MGL" => _mglWorldModel,
+            "M82" => _m82WorldModel,
             _ => _mp5WorldModel
         };
         bool shouldBeVisible = !_isDead && string.IsNullOrEmpty(_activeEmote);
@@ -227,6 +241,7 @@ public partial class CharacterModel : Node3D
             if (_mp5WorldModel != null) _mp5WorldModel.Visible = false;
             if (_lmgWorldModel != null) _lmgWorldModel.Visible = false;
             if (_mglWorldModel != null) _mglWorldModel.Visible = false;
+            if (_m82WorldModel != null) _m82WorldModel.Visible = false;
         }
         else
         {
@@ -235,18 +250,28 @@ public partial class CharacterModel : Node3D
                 if (_lmgWorldModel != null) _lmgWorldModel.Visible = true;
                 if (_mp5WorldModel != null) _mp5WorldModel.Visible = false;
                 if (_mglWorldModel != null) _mglWorldModel.Visible = false;
+                if (_m82WorldModel != null) _m82WorldModel.Visible = false;
             }
             else if (_currentEquippedWeapon == "MGL")
             {
                 if (_mglWorldModel != null) _mglWorldModel.Visible = true;
                 if (_mp5WorldModel != null) _mp5WorldModel.Visible = false;
                 if (_lmgWorldModel != null) _lmgWorldModel.Visible = false;
+                if (_m82WorldModel != null) _m82WorldModel.Visible = false;
+            }
+            else if (_currentEquippedWeapon == "M82")
+            {
+                if (_m82WorldModel != null) _m82WorldModel.Visible = true;
+                if (_mp5WorldModel != null) _mp5WorldModel.Visible = false;
+                if (_lmgWorldModel != null) _lmgWorldModel.Visible = false;
+                if (_mglWorldModel != null) _mglWorldModel.Visible = false;
             }
             else
             {
                 if (_mp5WorldModel != null) _mp5WorldModel.Visible = true;
                 if (_lmgWorldModel != null) _lmgWorldModel.Visible = false;
                 if (_mglWorldModel != null) _mglWorldModel.Visible = false;
+                if (_m82WorldModel != null) _m82WorldModel.Visible = false;
             }
         }
     }

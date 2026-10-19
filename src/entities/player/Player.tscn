@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3 uid="uid://dfpsplayer001"]
+[gd_scene load_steps=16 format=3 uid="uid://dfpsplayer001"]
 
 [ext_resource type="Script" path="res://src/entities/player/controllers/PlayerController.cs" id="1_playr"]
 [ext_resource type="PackedScene" path="res://src/ui/menus/pause/PauseMenu.tscn" id="2_pause"]
@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://src/entities/player/viewmodel/WorldWeapon.cs" id="8_wldwpn"]
 [ext_resource type="Script" path="res://src/entities/player/viewmodel/CharacterModel.cs" id="9_char"]
 [ext_resource type="PackedScene" path="res://src/ui/hud/emotes/EmoteWheel.tscn" id="10_emote"]
+[ext_resource type="PackedScene" path="res://src/ui/hud/weapons/WeaponWheel.tscn" id="11_wpn"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
 radius = 0.4
@@ -108,3 +109,5 @@ replication_config = SubResource("SceneReplicationConfig_sync")
 [node name="PauseMenu" parent="UI" instance=ExtResource("2_pause")]
 
 [node name="EmoteWheel" parent="UI" instance=ExtResource("10_emote")]
+ 
+[node name="WeaponWheel" parent="UI" instance=ExtResource("11_wpn")]

@@ -30,6 +30,7 @@ public partial class ViewmodelController : Node3D
     private Node3D? _mp5Model;
     private Node3D? _lmgModel;
     private Node3D? _mglModel;
+    private Node3D? _m82Model;
     private Node3D _muzzleMarker = null!;
     private MeshInstance3D _muzzleFlashMesh = null!;
     private OmniLight3D _muzzleFlashLight = null!;
@@ -88,6 +89,19 @@ public partial class ViewmodelController : Node3D
             _weaponRig.AddChild(_mglModel);
         }
 
+        // 4. Heavy Sniper: M82 (.50 BMG Anti-Material Rifle)
+        var m82Scene = ResourceLoader.Load<PackedScene>("res://assets/models/weapons/M82.glb");
+        if (m82Scene != null)
+        {
+            _m82Model = m82Scene.Instantiate<Node3D>();
+            _m82Model.Name = "M82_Model";
+            _m82Model.Scale = new Vector3(0.007f, 0.007f, 0.007f);
+            _m82Model.RotationDegrees = new Vector3(0.0f, 90.0f, 0.0f);
+            _m82Model.Position = new Vector3(0.05f, -0.28f, -0.15f);
+            _m82Model.Visible = false;
+            _weaponRig.AddChild(_m82Model);
+        }
+
         _muzzleMarker = new Node3D
         {
             Name = "MuzzleMarker",
@@ -95,7 +109,7 @@ public partial class ViewmodelController : Node3D
         };
         _weaponRig.AddChild(_muzzleMarker);
 
-        if (_mp5Model == null && _lmgModel == null && _mglModel == null)
+        if (_mp5Model == null && _lmgModel == null && _mglModel == null && _m82Model == null)
         {
             BuildProceduralFallback();
         }
@@ -150,6 +164,7 @@ public partial class ViewmodelController : Node3D
             if (_mp5Model != null) _mp5Model.Visible = false;
             if (_lmgModel != null) _lmgModel.Visible = true;
             if (_mglModel != null) _mglModel.Visible = false;
+            if (_m82Model != null) _m82Model.Visible = false;
             if (_muzzleMarker != null) _muzzleMarker.Position = new Vector3(0.02f, 0.04f, -0.725f);
         }
         else if (weaponName == "MGL")
@@ -157,19 +172,48 @@ public partial class ViewmodelController : Node3D
             if (_mp5Model != null) _mp5Model.Visible = false;
             if (_lmgModel != null) _lmgModel.Visible = false;
             if (_mglModel != null) _mglModel.Visible = true;
+            if (_m82Model != null) _m82Model.Visible = false;
             if (_muzzleMarker != null) _muzzleMarker.Position = new Vector3(0.02f, -0.05f, -0.58f);
+        }
+        else if (weaponName == "M82")
+        {
+            if (_mp5Model != null) _mp5Model.Visible = false;
+            if (_lmgModel != null) _lmgModel.Visible = false;
+            if (_mglModel != null) _mglModel.Visible = false;
+            if (_m82Model != null) _m82Model.Visible = true;
+            if (_muzzleMarker != null) _muzzleMarker.Position = new Vector3(0.05f, -0.05f, -1.05f);
         }
         else
         {
             if (_mp5Model != null) _mp5Model.Visible = true;
             if (_lmgModel != null) _lmgModel.Visible = false;
             if (_mglModel != null) _mglModel.Visible = false;
+            if (_m82Model != null) _m82Model.Visible = false;
             if (_muzzleMarker != null) _muzzleMarker.Position = new Vector3(0.0f, 0.04f, -0.36f);
         }
     }
 
     public void FireRecoil()
     {
+        if (_m82Model != null && _m82Model.Visible)
+        {
+            // Heavy .50 BMG sniper kickback
+            _recoilPosition = new Vector3(
+                (float)GD.RandRange(-0.003, 0.003),
+                0.035f,
+                0.11f
+            );
+            _recoilRotation = new Vector3(
+                0.24f,
+                (float)GD.RandRange(-0.015, 0.015),
+                (float)GD.RandRange(-0.015, 0.015)
+            );
+            _muzzleFlashTimer = 0.065f;
+            _muzzleFlashMesh.Visible = true;
+            _muzzleFlashLight.Visible = true;
+            return;
+        }
+
         // Punch weapon backward and up with clamping to prevent runaway recoil during 1200 RPM rapid fire
         _recoilPosition = new Vector3(
             Mathf.Clamp(_recoilPosition.X + (float)GD.RandRange(-0.002, 0.002), -0.015f, 0.015f),

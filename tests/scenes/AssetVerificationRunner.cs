@@ -342,6 +342,119 @@ public partial class AssetVerificationRunner : Node
         Vector3 mglFacing = -mglWorldModel.GlobalTransform.Basis.Z.Normalized();
         GD.Print($"  [OK] MGL world model verified: Facing={mglFacing}");
 
+        // Verify M82 .50 Cal Sniper Rifle
+        player.EquipWeapon("M82");
+        var m82Model = viewmodel.GetNodeOrNull<Node3D>("RifleRig/M82_Model");
+        if (m82Model == null || !m82Model.Visible)
+        {
+            GD.PrintErr("[TEST FAILED] M82_Model missing or not visible when M82 equipped!");
+            GetTree().Quit(1);
+            return;
+        }
+
+        var m82Bounds = GetCamBounds(m82Model, playerCam);
+        GD.Print($"  [OK] M82 in Camera Space: Min={m82Bounds.Position}, Max={m82Bounds.End}, Size={m82Bounds.Size}");
+        if (m82Bounds.Size.Z < 0.5f)
+        {
+            GD.PrintErr($"[TEST FAILED] M82 model size is too small! Actual length: {m82Bounds.Size.Z}m");
+            GetTree().Quit(1);
+            return;
+        }
+
+        if (player.MagCapacity != 10)
+        {
+            GD.PrintErr($"[TEST FAILED] M82 MagCapacity should be 10! Actual: {player.MagCapacity}");
+            GetTree().Quit(1);
+            return;
+        }
+
+        if (player.MaxReserveAmmo != 30)
+        {
+            GD.PrintErr($"[TEST FAILED] M82 MaxReserveAmmo should be 30! Actual: {player.MaxReserveAmmo}");
+            GetTree().Quit(1);
+            return;
+        }
+
+        if (Mathf.Abs(player.WeaponDamage - 250.0f) > 0.001f)
+        {
+            GD.PrintErr($"[TEST FAILED] M82 WeaponDamage should be 250! Actual: {player.WeaponDamage}");
+            GetTree().Quit(1);
+            return;
+        }
+
+        if (Mathf.Abs(player.FireRateInterval - 0.25f) > 0.001f)
+        {
+            GD.PrintErr($"[TEST FAILED] M82 FireRateInterval should be 0.25s (rapid semi-auto)! Actual: {player.FireRateInterval}");
+            GetTree().Quit(1);
+            return;
+        }
+
+        if (player.FireMode != "SEMI")
+        {
+            GD.PrintErr($"[TEST FAILED] M82 must default to SEMI! Actual: {player.FireMode}");
+            GetTree().Quit(1);
+            return;
+        }
+        player.Call("CycleFireMode");
+        if (player.FireMode != "SEMI")
+        {
+            GD.PrintErr($"[TEST FAILED] M82 must remain SEMI after cycle attempt! Actual: {player.FireMode}");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print($"  [OK] M82 Stats verified: MagCapacity={player.MagCapacity}, Reserve={player.MaxReserveAmmo}, Damage={player.WeaponDamage} (1-Shot Kill), FireRate={player.FireRateInterval:F2}s, FireMode={player.FireMode}");
+
+        var hud = player.GetNodeOrNull<FPSGame.UI.HUD.MatchHUD>("UI/MatchHUD");
+        if (hud?.Reticle == null)
+        {
+            GD.PrintErr("[TEST FAILED] ReticleWidget missing from MatchHUD!");
+            GetTree().Quit(1);
+            return;
+        }
+        hud.Reticle.SetScoped(true, 6.0f);
+        if (!hud.Reticle.IsScoped || Mathf.Abs(hud.Reticle.ScopeMagnification - 6.0f) > 0.01f)
+        {
+            GD.PrintErr("[TEST FAILED] ReticleWidget failed to enter 6x scoped state!");
+            GetTree().Quit(1);
+            return;
+        }
+        hud.Reticle.SetScoped(false);
+        if (hud.Reticle.IsScoped)
+        {
+            GD.PrintErr("[TEST FAILED] ReticleWidget failed to exit scoped state!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print("  [OK] ReticleWidget 6x sniper scope optic verified (solid blackout mask + open circle + crosshair).");
+
+        var m82WorldModel = handGrip.GetNodeOrNull<Node3D>("M82_Rifle");
+        if (m82WorldModel == null || !m82WorldModel.Visible)
+        {
+            GD.PrintErr("[TEST FAILED] M82_Rifle world model missing or not visible when M82 equipped!");
+            GetTree().Quit(1);
+            return;
+        }
+        Basis m82WorldBasis = boneWorldBasis * Basis.FromEuler(m82WorldModel.Rotation);
+        Vector3 m82BarrelDir = (m82WorldBasis * new Vector3(1, 0, 0)).Normalized();
+        Vector3 m82SightsDir = (m82WorldBasis * new Vector3(0, 1, 0)).Normalized();
+        GD.Print($"  [OK] M82 world model verified: Barrel={m82BarrelDir} (expected -Z), Sights={m82SightsDir} (expected +Y)");
+        if (m82BarrelDir.Z > -0.85f || m82SightsDir.Y < 0.85f)
+        {
+            GD.PrintErr($"[TEST FAILED] Third-person M82 not aimed forward or not vertical! Barrel={m82BarrelDir}, Up={m82SightsDir}");
+            GetTree().Quit(1);
+            return;
+        }
+
+        // Verify WeaponWheel in Player scene
+        var weaponWheel = player.GetNodeOrNull<FPSGame.UI.HUD.Weapons.WeaponWheel>("UI/WeaponWheel");
+        if (weaponWheel == null)
+        {
+            GD.PrintErr("[TEST FAILED] WeaponWheel node missing from Player.tscn UI hierarchy!");
+            GetTree().Quit(1);
+            return;
+        }
+        GD.Print("  [OK] WeaponWheel UI verified in Player.tscn.");
+
         player.EquipWeapon("MP5");
         if (player.MagCapacity != 30 || Mathf.Abs(player.FireRateInterval - 0.08f) > 0.001f)
         {

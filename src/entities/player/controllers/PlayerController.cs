@@ -16,6 +16,7 @@ using FPSGame.Core.Pooling;
 using FPSGame.Weapons.Projectiles;
 using FPSGame.VFX.Impacts;
 using FPSGame.Entities.Scorestreaks;
+using FPSGame.UI.HUD.Weapons;
 
 namespace FPSGame.Entities.Player.Controllers;
 
@@ -80,6 +81,7 @@ public partial class PlayerController : CharacterBody3D
     private Scoreboard? _scoreboard;
     private MatchHUD? _matchHud;
     private EmoteWheel? _emoteWheel;
+    private WeaponWheel? _weaponWheel;
     private HealthComponent? _healthComponent;
     private ViewmodelController? _viewmodel;
     private WorldWeapon? _worldWeapon;
@@ -109,6 +111,9 @@ public partial class PlayerController : CharacterBody3D
     private float _cameraPitch;
     private float _gravity = 9.81f;
     private ulong _tabPressTime;
+    private bool _isAiming;
+    private const float BaseFov = 85.0f;
+    private const float M82ScopeZoom = 6.0f;
 
     // Weapon & Combat Stats
     public string WeaponName { get; private set; } = "MP5";
@@ -121,40 +126,48 @@ public partial class PlayerController : CharacterBody3D
     private int _lmgReserveAmmo = 400;
     private int _mglMagAmmo = 6;
     private int _mglReserveAmmo = 18;
+    private int _m82MagAmmo = 10;
+    private int _m82ReserveAmmo = 30;
 
     // Independent fire modes per weapon slot
     private string _mp5FireMode = "AUTO";
     private string _lmgFireMode = "AUTO";
     private string _mglFireMode = "SEMI";
+    private string _m82FireMode = "SEMI";
 
     public int CurrentMagAmmo { get; private set; } = 30;
     public int ReserveAmmo { get; private set; } = 120;
     public int MagCapacity => WeaponName switch
     {
+        "M82" => 10,
         "MGL" => 6,
         "LMG" => 200,
         _ => 30
     };
     public int MaxReserveAmmo => WeaponName switch
     {
+        "M82" => 30,
         "MGL" => 18,
         "LMG" => 400,
         _ => 120
     };
     public float FireRateInterval => WeaponName switch
     {
+        "M82" => 0.25f, // M82 rapid semi-auto ~240 RPM
         "MGL" => 0.35f, // MGL semi-auto ~170 RPM
         "LMG" => 0.05f, // LMG 1200 RPM
         _ => 0.08f      // MP5 750 RPM
     };
     public float ReloadDuration => WeaponName switch
     {
+        "M82" => 3.4f,
         "MGL" => 2.8f,
         "LMG" => 3.0f,
         _ => 1.8f
     };
     public float WeaponDamage => WeaponName switch
     {
+        "M82" => 250.0f, // 1-shot kill anywhere on body/limbs
         "MGL" => 140.0f,
         "LMG" => 32.0f,
         _ => 28.0f
@@ -199,13 +212,14 @@ public partial class PlayerController : CharacterBody3D
     // Zero-allocation audio voice pool (expanded to 8 players to handle 1200 RPM without voice stealing)
     private AudioStream? _gunshotSound;
     private AudioStream? _mglShotSound;
+    private AudioStream? _m82ShotSound;
     private readonly AudioStreamPlayer[] _audioPlayers = new AudioStreamPlayer[8];
     private int _audioIndex;
     private readonly AudioStreamPlayer3D[] _spatialAudioPlayers = new AudioStreamPlayer3D[6];
     private int _spatialAudioIndex;
 
     // Pre-allocated physics raycast queries for zero heap allocations
-    private const float MaxBulletRange = 550.0f;
+    private const float MaxBulletRange = 2000.0f;
     private PhysicsRayQueryParameters3D _rayQuery = null!;
     private PhysicsRayQueryParameters3D _groundRayQuery = null!;
     private PhysicsRayQueryParameters3D _groundPlacementQuery = null!;
@@ -296,6 +310,12 @@ public partial class PlayerController : CharacterBody3D
             _emoteWheel.EmoteSelected += OnEmoteSelected;
         }
 
+        _weaponWheel = GetNodeOrNull<WeaponWheel>("UI/WeaponWheel");
+        if (_weaponWheel != null)
+        {
+            _weaponWheel.WeaponSelected += OnWeaponWheelSelected;
+        }
+
         if (_characterModel != null)
         {
             _characterModel.EmoteFinished += OnEmoteFinished;
@@ -310,6 +330,7 @@ public partial class PlayerController : CharacterBody3D
         // Initialize pre-allocated gunshot audio voice pool
         _gunshotSound = ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/weapons/gunshot.mp3");
         _mglShotSound = ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/weapons/mgl_shot.mp3");
+        _m82ShotSound = ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/weapons/m82_shot.mp3");
         for (int i = 0; i < _audioPlayers.Length; i++)
         {
             _audioPlayers[i] = new AudioStreamPlayer
@@ -482,6 +503,7 @@ public partial class PlayerController : CharacterBody3D
             _scoreboard = null;
             _matchHud = null;
             _emoteWheel = null;
+            _weaponWheel = null;
         }
     }
 
@@ -500,6 +522,11 @@ public partial class PlayerController : CharacterBody3D
             _emoteWheel.EmoteSelected -= OnEmoteSelected;
         }
 
+        if (_weaponWheel != null)
+        {
+            _weaponWheel.WeaponSelected -= OnWeaponWheelSelected;
+        }
+
         if (_characterModel != null)
         {
             _characterModel.EmoteFinished -= OnEmoteFinished;
@@ -515,9 +542,17 @@ public partial class PlayerController : CharacterBody3D
     {
         if (!IsLocalPlayer) return;
 
-        // Escape: dismiss emote wheel, dismiss scoreboard, or toggle pause menu
+        // Escape: dismiss weapon wheel, dismiss emote wheel, dismiss scoreboard, or toggle pause menu
         if (@event is InputEventKey escapeEvent && escapeEvent.Pressed && !escapeEvent.Echo && escapeEvent.Keycode == Key.Escape)
         {
+            if (_weaponWheel != null && _weaponWheel.IsOpen)
+            {
+                _weaponWheel.Close(triggerSelection: false);
+                Input.MouseMode = Input.MouseModeEnum.Captured;
+                GetViewport().SetInputAsHandled();
+                return;
+            }
+
             if (_emoteWheel != null && _emoteWheel.IsOpen)
             {
                 _emoteWheel.Close(triggerSelection: false);
@@ -543,7 +578,7 @@ public partial class PlayerController : CharacterBody3D
         {
             if (@event.IsActionPressed("emote_wheel") && !@event.IsEcho())
             {
-                if (!IsDead && (_pauseMenu == null || !_pauseMenu.IsOpen) && (_scoreboard == null || !_scoreboard.IsOpen))
+                if (!IsDead && (_pauseMenu == null || !_pauseMenu.IsOpen) && (_scoreboard == null || !_scoreboard.IsOpen) && (_weaponWheel == null || !_weaponWheel.IsOpen))
                 {
                     _emoteWheel?.Open();
                     Input.MouseMode = Input.MouseModeEnum.Visible;
@@ -564,6 +599,33 @@ public partial class PlayerController : CharacterBody3D
         }
 
         if (_emoteWheel != null && _emoteWheel.IsOpen) return;
+
+        // Hold U for Weapon Radial Wheel
+        if (@event.IsAction("weapon_wheel"))
+        {
+            if (@event.IsActionPressed("weapon_wheel") && !@event.IsEcho())
+            {
+                if (!IsDead && (_pauseMenu == null || !_pauseMenu.IsOpen) && (_scoreboard == null || !_scoreboard.IsOpen) && (_emoteWheel == null || !_emoteWheel.IsOpen))
+                {
+                    _weaponWheel?.Open();
+                    Input.MouseMode = Input.MouseModeEnum.Visible;
+                    GetViewport().SetInputAsHandled();
+                    return;
+                }
+            }
+            else if (@event.IsActionReleased("weapon_wheel"))
+            {
+                if (_weaponWheel != null && _weaponWheel.IsOpen)
+                {
+                    _weaponWheel.Close(triggerSelection: true);
+                    Input.MouseMode = Input.MouseModeEnum.Captured;
+                    GetViewport().SetInputAsHandled();
+                    return;
+                }
+            }
+        }
+
+        if (_weaponWheel != null && _weaponWheel.IsOpen) return;
 
         // Tab: toggle/hold scoreboard
         if (@event is InputEventKey tabEvent && !tabEvent.Echo && tabEvent.Keycode == Key.Tab)
@@ -757,15 +819,18 @@ public partial class PlayerController : CharacterBody3D
 
         if (_pauseMenu != null && _pauseMenu.IsOpen) return;
 
-        // Mouse look
+        // Mouse look (scaled by FOV when scoped in)
         if (@event is InputEventMouseMotion motion && Input.MouseMode == Input.MouseModeEnum.Captured && !IsDead)
         {
-            RotateY(-motion.Relative.X * MouseSensitivity);
+            float fovFactor = _camera != null ? (_camera.Fov / BaseFov) : 1.0f;
+            float scaledSens = MouseSensitivity * fovFactor;
 
-            _cameraPitch = Mathf.Clamp(_cameraPitch - motion.Relative.Y * MouseSensitivity, -Mathf.DegToRad(89.0f), Mathf.DegToRad(89.0f));
+            RotateY(-motion.Relative.X * scaledSens);
+
+            _cameraPitch = Mathf.Clamp(_cameraPitch - motion.Relative.Y * scaledSens, -Mathf.DegToRad(89.0f), Mathf.DegToRad(89.0f));
             _cameraPivot.Rotation = new Vector3(_cameraPitch, 0.0f, 0.0f);
 
-            _viewmodel?.UpdateSway(motion.Relative);
+            _viewmodel?.UpdateSway(motion.Relative * fovFactor);
         }
     }
 
@@ -915,13 +980,18 @@ public partial class PlayerController : CharacterBody3D
             }
             if (_viewmodel != null)
             {
-                bool shouldShowViewmodel = _activePlacement == StreakPlacementType.None && _weaponUnholsterTimer <= 0.0f;
+                bool isScopeActive = _isAiming && WeaponName == "M82" && _camera.Fov < 45.0f;
+                bool shouldShowViewmodel = _activePlacement == StreakPlacementType.None &&
+                                           _weaponUnholsterTimer <= 0.0f &&
+                                           !isScopeActive;
                 if (_viewmodel.Visible != shouldShowViewmodel)
                 {
                     _viewmodel.Visible = shouldShowViewmodel;
                 }
             }
         }
+
+        UpdateCameraFovAndScope(dt);
 
         // Update compass heading on HUD (North is -Z in Godot 3D)
         if (_matchHud != null)
@@ -1073,11 +1143,56 @@ public partial class PlayerController : CharacterBody3D
         return hit.Count > 0;
     }
 
+    private void UpdateCameraFovAndScope(float dt)
+    {
+        if (_camera == null) return;
+
+        bool canAim = !IsDead && (_pauseMenu == null || !_pauseMenu.IsOpen) &&
+                      (_scoreboard == null || !_scoreboard.IsOpen) &&
+                      (_weaponWheel == null || !_weaponWheel.IsOpen) &&
+                      (_emoteWheel == null || !_emoteWheel.IsOpen) &&
+                      _activePlacement == StreakPlacementType.None &&
+                      _reloadTimer <= 0.0f;
+
+        _isAiming = canAim && (Input.IsActionPressed("fire_secondary") || Input.IsMouseButtonPressed(MouseButton.Right));
+
+        if (_isAiming && WeaponName == "M82")
+        {
+            float targetFov = BaseFov / M82ScopeZoom; // ~14.167 deg (6x zoom)
+            _camera.Fov = Mathf.Lerp(_camera.Fov, targetFov, 14.0f * dt);
+
+            bool isScopeActive = _camera.Fov < 45.0f;
+            _matchHud?.Reticle.SetScoped(isScopeActive, M82ScopeZoom);
+            if (_viewmodel != null)
+            {
+                _viewmodel.Visible = !isScopeActive;
+            }
+        }
+        else
+        {
+            if (_camera.Fov < BaseFov - 0.2f)
+            {
+                _camera.Fov = Mathf.Lerp(_camera.Fov, BaseFov, 16.0f * dt);
+            }
+            else if (_camera.Fov != BaseFov)
+            {
+                _camera.Fov = BaseFov;
+            }
+
+            _matchHud?.Reticle.SetScoped(false);
+            if (_viewmodel != null && IsLocalPlayer && !IsDead)
+            {
+                _viewmodel.Visible = true;
+            }
+        }
+    }
+
     private void HandleWeaponFiring()
     {
         if (IsDead || (_pauseMenu != null && _pauseMenu.IsOpen) ||
             (MatchManager.Instance != null && MatchManager.Instance.IsMovementLocked) ||
             _activePlacement != StreakPlacementType.None ||
+            (_weaponWheel != null && _weaponWheel.IsOpen) ||
             _weaponUnholsterTimer > 0.0f)
         {
             return;
@@ -1128,10 +1243,18 @@ public partial class PlayerController : CharacterBody3D
 
         _matchHud?.UpdateWeapon(WeaponName, FireMode, CurrentMagAmmo, ReserveAmmo);
 
-        // Procedural camera kick (beefy recoil for 40mm launcher, tuned recoil for 1200 RPM LMG)
-        float kick = WeaponName == "MGL" ? 0.024f : (WeaponName == "LMG" ? 0.0036f : 0.008f);
+        Vector3 origin = _camera.GlobalPosition;
+        Vector3 direction = -_camera.GlobalBasis.Z;
+
+        // Procedural camera kick (applied after sampling true forward aiming vector)
+        float kick = WeaponName == "M82" ? 0.055f : (WeaponName == "MGL" ? 0.024f : (WeaponName == "LMG" ? 0.0036f : 0.008f));
         _cameraPitch = Mathf.Clamp(_cameraPitch + kick, -Mathf.DegToRad(89.0f), Mathf.DegToRad(89.0f));
         _cameraPivot.Rotation = new Vector3(_cameraPitch, 0.0f, 0.0f);
+
+        if (WeaponName == "M82")
+        {
+            _cameraTrauma = Mathf.Clamp(_cameraTrauma + 0.15f, 0.0f, 1.0f);
+        }
 
         // Procedural viewmodel recoil animation & muzzle flash
         _viewmodel?.FireRecoil();
@@ -1139,13 +1262,10 @@ public partial class PlayerController : CharacterBody3D
         // Audio gunfire report
         PlayLocalGunshotSound();
 
-        Vector3 origin = _camera.GlobalPosition;
-        Vector3 direction = -_camera.GlobalBasis.Z;
-
         // Special handling for MGL: launches physical 40mm HEDP ballistic projectile
         if (WeaponName == "MGL")
         {
-            Vector3 spawnOrigin = _viewmodel != null ? _viewmodel.MuzzlePosition : origin + direction * 0.5f;
+            Vector3 spawnOrigin = (_viewmodel != null && _viewmodel.Visible) ? _viewmodel.MuzzlePosition : origin + direction * 0.5f;
             // Prevent spawning inside wall when standing point-blank against geometry
             var space = GetWorld3D()?.DirectSpaceState;
             if (space != null)
@@ -1180,7 +1300,7 @@ public partial class PlayerController : CharacterBody3D
         Vector3 hitPos = result.Count > 0 ? result["position"].AsVector3() : origin + direction * MaxBulletRange;
 
         // Spawn immediate local bullet tracer
-        Vector3 tracerStart = _viewmodel != null ? _viewmodel.MuzzlePosition : origin + direction * 0.5f;
+        Vector3 tracerStart = (_viewmodel != null && _viewmodel.Visible) ? _viewmodel.MuzzlePosition : origin + direction * 0.5f;
         var tracer = BulletTracer.Create(tracerStart, hitPos);
         GetTree().Root.AddChild(tracer);
 
@@ -1225,7 +1345,12 @@ public partial class PlayerController : CharacterBody3D
             targetPlayer = colNode.GetOwnerOrNull<PlayerController>() ?? colNode.GetParentOrNull<PlayerController>();
         }
 
-        float damageAmount = weaponName == "LMG" ? 36.0f : 28.0f;
+        float damageAmount = weaponName switch
+        {
+            "M82" => 250.0f,
+            "LMG" => 36.0f,
+            _ => 28.0f
+        };
 
         if (targetHurtbox != null)
         {
@@ -1380,7 +1505,13 @@ public partial class PlayerController : CharacterBody3D
 
     private void CycleFireMode()
     {
-        if (WeaponName == "MGL")
+        if (WeaponName == "M82")
+        {
+            FireMode = "SEMI"; // M82 is strictly semi-automatic
+            _m82FireMode = "SEMI";
+            return;
+        }
+        else if (WeaponName == "MGL")
         {
             FireMode = "SEMI"; // MGL is strictly semi-automatic
             _mglFireMode = "SEMI";
@@ -1410,6 +1541,10 @@ public partial class PlayerController : CharacterBody3D
         if (_reloadTimer > 0.0f) return;
         if (CurrentMagAmmo >= MagCapacity) return;
         if (ReserveAmmo <= 0) return;
+
+        _isAiming = false;
+        if (_camera != null) _camera.Fov = BaseFov;
+        _matchHud?.Reticle.SetScoped(false);
 
         _reloadTimer = ReloadDuration;
         _viewmodel?.StartReload(ReloadDuration);
@@ -1448,8 +1583,20 @@ public partial class PlayerController : CharacterBody3D
             _mglMagAmmo = CurrentMagAmmo;
             _mglReserveAmmo = ReserveAmmo;
         }
+        else if (WeaponName == "M82")
+        {
+            _m82MagAmmo = CurrentMagAmmo;
+            _m82ReserveAmmo = ReserveAmmo;
+        }
 
         _matchHud?.UpdateWeapon(WeaponName, FireMode, CurrentMagAmmo, ReserveAmmo);
+    }
+
+    private void OnWeaponWheelSelected(string weaponName)
+    {
+        if (IsDead) return;
+        if (_activePlacement != StreakPlacementType.None) CancelStreakPlacement();
+        EquipWeapon(weaponName);
     }
 
     public void EquipWeapon(string newWeapon)
@@ -1476,9 +1623,22 @@ public partial class PlayerController : CharacterBody3D
             _mglReserveAmmo = ReserveAmmo;
             _mglFireMode = FireMode;
         }
+        else if (WeaponName == "M82")
+        {
+            _m82MagAmmo = CurrentMagAmmo;
+            _m82ReserveAmmo = ReserveAmmo;
+            _m82FireMode = FireMode;
+        }
 
-        // Cancel active reload or emote
+        // Cancel active reload, emote, or aim zoom
         if (_isEmoting) Rpc(nameof(StopEmoteRpc));
+        _isAiming = false;
+        if (_camera != null) _camera.Fov = BaseFov;
+        _matchHud?.Reticle.SetScoped(false);
+        if (_viewmodel != null && IsLocalPlayer && !IsDead)
+        {
+            _viewmodel.Visible = true;
+        }
         _reloadTimer = 0.0f;
         _fireCooldownTimer = 0.15f; // Quick swap transition delay
 
@@ -1494,6 +1654,10 @@ public partial class PlayerController : CharacterBody3D
         else if (WeaponName == "MGL")
         {
             FireMode = _mglFireMode;
+        }
+        else if (WeaponName == "M82")
+        {
+            FireMode = _m82FireMode;
         }
 
         // Restore ammo pool for newly equipped weapon
@@ -1511,6 +1675,11 @@ public partial class PlayerController : CharacterBody3D
         {
             CurrentMagAmmo = _mglMagAmmo;
             ReserveAmmo = _mglReserveAmmo;
+        }
+        else if (WeaponName == "M82")
+        {
+            CurrentMagAmmo = _m82MagAmmo;
+            ReserveAmmo = _m82ReserveAmmo;
         }
 
         _matchHud?.UpdateWeapon(WeaponName, FireMode, CurrentMagAmmo, ReserveAmmo);
@@ -1538,7 +1707,13 @@ public partial class PlayerController : CharacterBody3D
         if (player == null) return;
         _audioIndex = (_audioIndex + 1) % _audioPlayers.Length;
 
-        if (WeaponName == "MGL")
+        if (WeaponName == "M82")
+        {
+            player.Stream = _m82ShotSound ?? _gunshotSound;
+            player.PitchScale = (float)GD.RandRange(0.98, 1.02);
+            player.VolumeDb = 0.0f; // Normal volume level, directly from audio file
+        }
+        else if (WeaponName == "MGL")
         {
             player.Stream = _mglShotSound ?? _gunshotSound;
             player.PitchScale = (float)GD.RandRange(0.97, 1.03);
@@ -1563,11 +1738,23 @@ public partial class PlayerController : CharacterBody3D
         _spatialAudioIndex = (_spatialAudioIndex + 1) % _spatialAudioPlayers.Length;
 
         player.GlobalPosition = origin;
-        if (weapon == "MGL")
+        if (weapon == "M82")
+        {
+            player.Stream = _m82ShotSound ?? _gunshotSound;
+            player.PitchScale = (float)GD.RandRange(0.98, 1.02);
+            player.VolumeDb = 0.0f; // Normal volume level
+            player.UnitSize = 25.0f;
+            player.MaxDistance = 600.0f;
+            player.MaxDb = 0.0f;
+        }
+        else if (weapon == "MGL")
         {
             player.Stream = _mglShotSound ?? _gunshotSound;
             player.PitchScale = (float)GD.RandRange(0.96, 1.04);
             player.VolumeDb = 0.0f;
+            player.UnitSize = 25.0f;
+            player.MaxDistance = 600.0f;
+            player.MaxDb = 0.0f;
         }
         else
         {
@@ -1575,6 +1762,9 @@ public partial class PlayerController : CharacterBody3D
             float basePitch = weapon == "LMG" ? 0.82f : 1.0f;
             player.PitchScale = basePitch * (float)GD.RandRange(0.96, 1.04);
             player.VolumeDb = weapon == "LMG" ? 1.0f : 0.0f;
+            player.UnitSize = 25.0f;
+            player.MaxDistance = 600.0f;
+            player.MaxDb = 0.0f;
         }
 
         player.Play();
@@ -1619,6 +1809,16 @@ public partial class PlayerController : CharacterBody3D
             _emoteWheel.Close(triggerSelection: false);
             Input.MouseMode = Input.MouseModeEnum.Captured;
         }
+
+        if (_weaponWheel != null && _weaponWheel.IsOpen)
+        {
+            _weaponWheel.Close(triggerSelection: false);
+            Input.MouseMode = Input.MouseModeEnum.Captured;
+        }
+
+        _isAiming = false;
+        if (_camera != null) _camera.Fov = BaseFov;
+        _matchHud?.Reticle.SetScoped(false);
 
         CancelStreakPlacement();
         CurrentStreakKills = 0;
@@ -1783,6 +1983,8 @@ public partial class PlayerController : CharacterBody3D
         _lmgReserveAmmo = 400;
         _mglMagAmmo = 6;
         _mglReserveAmmo = 18;
+        _m82MagAmmo = 10;
+        _m82ReserveAmmo = 30;
         CurrentMagAmmo = MagCapacity;
         ReserveAmmo = MaxReserveAmmo;
         _reloadTimer = 0.0f;
@@ -1800,7 +2002,14 @@ public partial class PlayerController : CharacterBody3D
         _mp5FireMode = "AUTO";
         _lmgFireMode = "AUTO";
         _mglFireMode = "SEMI";
-        FireMode = WeaponName == "MGL" ? _mglFireMode : (WeaponName == "LMG" ? _lmgFireMode : _mp5FireMode);
+        _m82FireMode = "SEMI";
+        FireMode = WeaponName switch
+        {
+            "M82" => _m82FireMode,
+            "MGL" => _mglFireMode,
+            "LMG" => _lmgFireMode,
+            _ => _mp5FireMode
+        };
         CurrentStreakKills = 0;
         UavCount = 0;
         CarePackageCount = 0;
@@ -1826,11 +2035,14 @@ public partial class PlayerController : CharacterBody3D
 
         if (IsLocalPlayer)
         {
+            _isAiming = false;
             _cameraPitch = 0.0f;
             _cameraPivot.Position = new Vector3(0.0f, 1.6f, 0.0f);
             _cameraPivot.Rotation = Vector3.Zero;
             _camera.Position = Vector3.Zero;
             _camera.Rotation = Vector3.Zero;
+            _camera.Fov = BaseFov;
+            _matchHud?.Reticle.SetScoped(false);
 
             if (_viewmodel != null)
             {
@@ -1914,8 +2126,8 @@ public partial class PlayerController : CharacterBody3D
             Rpc(nameof(StopEmoteRpc));
         }
 
-        bool isSprinting = !IsCrouched && Input.IsActionPressed("sprint") && inputDir.Y < 0;
-        float targetSpeed = IsCrouched ? CrouchSpeed : (isSprinting ? SprintSpeed : WalkSpeed);
+        bool isSprinting = !IsCrouched && !_isAiming && Input.IsActionPressed("sprint") && inputDir.Y < 0;
+        float targetSpeed = IsCrouched ? CrouchSpeed : (isSprinting ? SprintSpeed : (_isAiming ? WalkSpeed * 0.75f : WalkSpeed));
 
         if (wishDir != Vector3.Zero)
         {

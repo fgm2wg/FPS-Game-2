@@ -193,6 +193,42 @@ public static class AssetIntegrationTests
             instance.QueueFree();
         }
 
+        // 6c. Verify M82 Model
+        var m82 = ResourceLoader.Load<PackedScene>("res://assets/models/weapons/M82.glb");
+        if (m82 == null)
+        {
+            GD.PrintErr("[AssetTest] Failed to load M82.glb");
+            allPassed = false;
+        }
+        else
+        {
+            var instance = m82.Instantiate<Node3D>();
+            var ap = instance.FindChild("*AnimationPlayer*", true, false) as AnimationPlayer;
+            string anims = ap != null ? string.Join(", ", ap.GetAnimationList()) : "none";
+            GD.Print($"[AssetTest] M82 direct children: {instance.GetChildCount()}, animations: {anims}");
+            Aabb meshBounds = new Aabb();
+            bool hasMesh = false;
+            foreach (Node c in instance.FindChildren("*", "MeshInstance3D"))
+            {
+                if (c is MeshInstance3D mi && mi.Mesh != null)
+                {
+                    Transform3D rel = Transform3D.Identity;
+                    Node cur = mi;
+                    while (cur != instance && cur is Node3D cur3)
+                    {
+                        rel = cur3.Transform * rel;
+                        cur = cur.GetParent();
+                    }
+                    Aabb b = rel * mi.Mesh.GetAabb();
+                    if (!hasMesh) { meshBounds = b; hasMesh = true; }
+                    else { meshBounds = meshBounds.Merge(b); }
+                    GD.Print($"    [Mesh] {mi.Name}: RelBounds Size={b.Size}, Center={b.GetCenter()}, Min={b.Position}, Max={b.End}");
+                }
+            }
+            GD.Print($"    [M82 Total Bounds in Model Space] Size={meshBounds.Size}, Center={meshBounds.GetCenter()}, Min={meshBounds.Position}, Max={meshBounds.End}");
+            instance.QueueFree();
+        }
+
         // 7. Verify Gunshot Audio
         var audio = ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/weapons/gunshot.mp3");
         if (audio == null)
@@ -203,6 +239,17 @@ public static class AssetIntegrationTests
         else
         {
             GD.Print($"[AssetTest] gunshot.mp3 loaded successfully! Length: {audio.GetLength():F2}s");
+        }
+
+        var m82Audio = ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/weapons/m82_shot.mp3");
+        if (m82Audio == null)
+        {
+            GD.PrintErr("[AssetTest] Failed to load m82_shot.mp3");
+            allPassed = false;
+        }
+        else
+        {
+            GD.Print($"[AssetTest] m82_shot.mp3 loaded successfully! Length: {m82Audio.GetLength():F2}s");
         }
 
         var mglAudio = ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/weapons/mgl_shot.mp3");
@@ -331,6 +378,42 @@ public static class AssetIntegrationTests
             {
                 GD.Print($"[AssetTest] Audio {System.IO.Path.GetFileName(audioPath)} loaded! Length={st.GetLength():F2}s");
             }
+        }
+
+        // Verify M82 model & audio
+        var m82Scene = ResourceLoader.Load<PackedScene>("res://assets/models/weapons/M82.glb");
+        if (m82Scene == null)
+        {
+            GD.PrintErr("[AssetTest] Failed to load M82.glb");
+            allPassed = false;
+        }
+        else
+        {
+            var inst = m82Scene.Instantiate<Node3D>();
+            GD.Print($"[AssetTest] M82.glb loaded successfully! Children count: {inst.GetChildCount()}");
+            inst.QueueFree();
+        }
+
+        var m82Shot = ResourceLoader.Load<AudioStream>("res://assets/audio/sfx/weapons/m82_shot.mp3");
+        if (m82Shot == null)
+        {
+            GD.PrintErr("[AssetTest] Failed to load m82_shot.mp3");
+            allPassed = false;
+        }
+        else
+        {
+            GD.Print($"[AssetTest] m82_shot.mp3 loaded successfully! Length={m82Shot.GetLength():F2}s");
+        }
+
+        // Verify WeaponWheel configuration
+        if (FPSGame.UI.HUD.Weapons.WeaponWheel.Weapons.Length != 4)
+        {
+            GD.PrintErr($"[AssetTest] WeaponWheel expected 4 weapons, got {FPSGame.UI.HUD.Weapons.WeaponWheel.Weapons.Length}");
+            allPassed = false;
+        }
+        else
+        {
+            GD.Print("[AssetTest] WeaponWheel 4 weapons verified: MP5, FN MINIMI, M32 MGL, M82");
         }
 
         return allPassed;
